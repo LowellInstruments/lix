@@ -1,8 +1,8 @@
 import os
 import subprocess as sp
 import sys
-from ascii85 import ascii85_to_num
-from temperature import LixFileConverterT
+from lix.ascii85 import ascii85_to_num
+from lix.temperature import LixFileConverterT
 
 
 

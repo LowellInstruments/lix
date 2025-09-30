@@ -1,8 +1,11 @@
+import datetime
 import os
 import subprocess as sp
 import sys
-from lix.ascii85 import ascii85_to_num
+from lix.ascii85 import ascii85_to_num as a2n
+from lix.pressure import LixFileConverterP, prf_compensate_pressure
 from lix.temperature import LixFileConverterT
+from dateutil.tz import tzlocal, tzutc
 
 
 
@@ -11,21 +14,42 @@ MML = 1
 CS = 256
 MASK_TIME_EXTENDED = 0x40
 g_glt = ''
+LEN_LIX_FILE_CC_AREA = 5 * 33
+LEN_LIX_FILE_CF_AREA = 5 * 9
+LEN_LIX_FILE_CONTEXT = 64
+MORE_COLUMNS = 1
+g_epoch = 0
+g_last_ct = 0
 
 
 
-# todo: do this non-default
-DEF_TMR = "7VZ<2"
-DEF_TMA = "3g?gQ"
-DEF_TMB = "3HFKd"
-DEF_TMC = "1S#M`"
-DEF_TMD = "1ps%'"
-tmr = ascii85_to_num(DEF_TMR)
-tma = ascii85_to_num(DEF_TMA)
-tmb = ascii85_to_num(DEF_TMB)
-tmc = ascii85_to_num(DEF_TMC)
-tmd = ascii85_to_num(DEF_TMD)
-lct = LixFileConverterT(tma, tmb, tmc, tmd, tmr)
+def _p(s):
+    print(s)
+
+
+
+
+def _lix_mah_start_time_to_seconds(s: str) -> int:
+    # s: '231103190012' embedded in macro_header
+    dt = datetime.datetime.strptime(s, "%y%m%d%H%M%S")
+    # set dt as UTC since objects are 'naive' by default
+    dt_utc = dt.replace(tzinfo=tzutc())
+    dt_utc.astimezone(tzlocal())
+    rv = dt_utc.timestamp()
+    # rv: 1699038012
+    return int(rv)
+
+
+
+def _lix_mah_time_to_str(b: bytes) -> str:
+    # b: b'\x24\x01\x31\x12\x34\x56'
+    s = ''
+    for v in b:
+        high = (v & 0xf0) >> 4
+        low = (v & 0x0f) >> 0
+        s += f'{high}{low}'
+    # s: '240131123456'
+    return s
 
 
 
@@ -57,7 +81,83 @@ def _parse_macro_header(bb):
     global g_glt
     g_glt = ''
     g_glt = bb[:3].decode()
-    print('glt', g_glt)
+    file_type = bb[:3]
+    file_version = bb[3]
+    timestamp = bb[4:10]
+    battery = bb[10:12]
+    hdr_idx = bb[12]
+    # HSA macro-header must match firmware hsa.h
+    i_mah = 13
+    cc_area = bb[i_mah: i_mah + LEN_LIX_FILE_CC_AREA]
+    # context
+    i = CS - LEN_LIX_FILE_CONTEXT
+    gfv = bb[i:i + 4]
+    i += 4
+    rvn = bb[i]
+    i += 1
+    pfm = bb[i]
+    i += 1
+    spn = bb[i]
+    i += 1
+    spt = bb[i:i + 5].decode()
+    i += 5
+    dro = bb[i:i + 5].decode()
+    i += 5
+    dru = bb[i:i + 5].decode()
+    i += 5
+    # DRF does not take 5 characters but 2
+    drf = bb[i:i + 2].decode()
+    i += 2
+    dso = bb[i:i + 5].decode()
+    i += 5
+    dsu = bb[i:i + 5].decode()
+
+    # display all this info
+    _p(f"\n\tMACRO header \t|  logger type {file_type.decode()}")
+    _p(f"\tfile version \t|  {file_version}")
+    timestamp_str = _lix_mah_time_to_str(timestamp)
+
+    _p(f"\tdatetime is   \t|  {timestamp_str}")
+    bat = int.from_bytes(battery, "big")
+    _p("\tbattery level \t|  0x{:04x} = {} mV".format(bat, bat))
+    _p(f"\theader index \t|  {hdr_idx}")
+    if b"00004" != cc_area[:5]:
+        return {}
+    _p("\tcc_area \t\t|  detected")
+    pad = '\t\t\t\t\t   '
+    _p(f'{pad}tmr = {a2n(cc_area[10:15].decode())}')
+    _p(f'{pad}tma = {a2n(cc_area[15:20].decode())}')
+    _p(f'{pad}tmb = {a2n(cc_area[20:25].decode())}')
+    _p(f'{pad}tmc = {a2n(cc_area[25:30].decode())}')
+    _p(f'{pad}tmd = {a2n(cc_area[30:35].decode())}')
+    _p(f'{pad}pra = {a2n(cc_area[125:130].decode())}')
+    _p(f'{pad}prb = {a2n(cc_area[130:135].decode())}')
+    # PRC / PRD are not ascii85, also, we need them
+    prc = float(cc_area[135:140].decode()) / 100
+    prd = float(cc_area[140:145].decode()) / 100
+    _p(f'{pad}prc = {prc}')
+    _p(f'{pad}prd = {prd}')
+    _p(f'{pad}dco = {a2n(cc_area[145:150].decode())}')
+    _p(f'{pad}nco = {a2n(cc_area[150:155].decode())}')
+    _p(f'{pad}dhu = {a2n(cc_area[155:160].decode())}')
+    _p(f'{pad}dcd = {a2n(cc_area[160:165].decode())}')
+    _p("\n\tcontext \t\t|  detected")
+    _p(f'{pad}gfv = {gfv}')
+    _p(f'{pad}rvn = {rvn}')
+    _p(f'{pad}pfm = {pfm}')
+    _p(f'{pad}spn = {spn}')
+    _p(f'{pad}spt = {spt}')
+    _p(f'{pad}dro = {dro}')
+    _p(f'{pad}dru = {dru}')
+    _p(f'{pad}drf = {drf}')
+    _p(f'{pad}dso = {dso}')
+    _p(f'{pad}dsu = {dsu}')
+
+    # get first time ever
+    global g_epoch
+    g_epoch = _lix_mah_start_time_to_seconds(timestamp_str)
+    print('g_epoch', g_epoch)
+
 
 
 
@@ -84,29 +184,61 @@ def _parse_mask(bb):
     return lm, t
 
 
+def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
 
-def _parse_sample(bb, t, fo):
-
-    temp = ''
-    temp_as_celsius = ''
-    pres = ''
+    # rt:  temperature raw ADC counts
+    # rp:  pressure raw ADC counts
+    # rpd: pressure raw decibar using PRA, PRB
+    # cp:  compensated pressure ADC counts
+    # cpd: compensated pressure decibar using PRA, PRB
+    # vt:  temperature as Celsius
+    rt = ''
+    rp = ''
+    cp = ''
     ac_x = ''
     ac_y = ''
     ac_z = ''
+    vt = ''
+    rpd = ''
+    cpd = ''
+    vax = ''
+    vay = ''
+    vaz = ''
+
+
+    # all of them
+    global g_last_ct
+    g_last_ct += t
+    t_str = datetime.datetime.utcfromtimestamp(g_epoch + g_last_ct).isoformat()
+    t_str = t_str + '.000Z'
+
 
     if g_glt in ('TDO', 'CTD'):
         bb_t = bb[0:2]
-        temp = _decode_sensor_measurement('T', bb_t)
-        temp_as_celsius = '{:06.3f}'.format(float(lct.convert(temp)))
+        rt = _decode_sensor_measurement('T', bb_t)
+        vt = '{:06.3f}'.format(float(lct.convert(rt)))
         bb_p = bb[2:4]
-        pres = _decode_sensor_measurement('P', bb_p)
+        rp = _decode_sensor_measurement('P', bb_p)
+        cp = prf_compensate_pressure(rp, rt, prc, prd)
+        rpd = '{:06.3f}'.format(lcp.convert(rp)[0])
+        cpd = '{:06.3f}'.format(lcp.convert(cp)[0])
         bb_a = bb[4:10]
-        ac_x = _decode_sensor_measurement('A', bb_a[0:2])
-        ac_y = _decode_sensor_measurement('A', bb_a[2:4])
-        ac_z = _decode_sensor_measurement('A', bb_a[4:6])
+        vax = _decode_sensor_measurement('A', bb_a[0:2])
+        vay = _decode_sensor_measurement('A', bb_a[2:4])
+        vaz = _decode_sensor_measurement('A', bb_a[4:6])
+
 
     if g_glt == 'TDO':
-        fo.write(f'{t},{temp},{temp_as_celsius},{pres},{ac_x},{ac_y},{ac_z}\n')
+        if MORE_COLUMNS:
+            # et: elapsed time
+            et = t
+            # ct: cumulative time
+            s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
+                f'{cpd},{vax},{vay},{vaz}\n'
+            fo.write(s)
+        else:
+            fo.write(f'{t_str},{vt},{rpd},{vax},{vay},{vaz}\n')
+
 
     if g_glt == 'CTD':
         bb_c = bb[10:]
@@ -114,7 +246,10 @@ def _parse_sample(bb, t, fo):
         c1 = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
         c2 = int.from_bytes(bb_c[4:6], byteorder='big', signed=False)
         c3 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
-        fo.write(f'{t},{temp},{temp_as_celsius},{pres},{ac_x},{ac_y},{ac_z},{c0},{c1},{c2},{c3}\n')
+        fo.write(f'{t},{rt},{vt},{rp},{ac_x},{ac_y},{ac_z},{c0},{c1},{c2},{c3}\n')
+
+
+
 
 
 
@@ -140,6 +275,8 @@ def parse_file_lid_v5(p):
     # separate macro_header
     bb_macro_header = bb[:CS]
     _parse_macro_header(bb_macro_header)
+    global g_last_ct
+    g_last_ct = 0
 
 
     # get variables depending on logger type
@@ -148,7 +285,13 @@ def parse_file_lid_v5(p):
     suffix = ''
     if g_glt == 'TDO':
         sl = 10
-        csv_column_titles = f't,temp,temp(c),pres,Ax,Ay,Az\n'
+        csv_column_titles = 'ISO 8601 Time,' \
+               'Temperature (C),Pressure (dbar),Ax,Ay,Az\n'
+        if MORE_COLUMNS:
+            csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
+                   'raw ADC Temp,raw ADC Pressure,' \
+                   'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
+                   'Compensated Pressure (dbar),Ax,Ay,Az\n'
         suffix = 'TDO'
     elif g_glt == 'CTD':
         sl = 18
@@ -164,10 +307,24 @@ def parse_file_lid_v5(p):
 
     # start CSV file
     path_csv = p.replace('.lid', f'_{suffix}.csv')
-    print(path_csv)
     print(f'output csv file = {path_csv}')
     f_csv = open(path_csv, 'w')
     f_csv.write(csv_column_titles)
+
+
+    # grab the cc area in the macro_header
+    cc_area = bb[13: 13 + LEN_LIX_FILE_CC_AREA]
+    tmr = a2n(cc_area[10:15].decode())
+    tma = a2n(cc_area[15:20].decode())
+    tmb = a2n(cc_area[20:25].decode())
+    tmc = a2n(cc_area[25:30].decode())
+    tmd = a2n(cc_area[30:35].decode())
+    pra = a2n(cc_area[125:130].decode())
+    prb = a2n(cc_area[130:135].decode())
+    prc = float(cc_area[135:140].decode()) / 100
+    prd = float(cc_area[140:145].decode()) / 100
+    lct = LixFileConverterT(tma, tmb, tmc, tmd, tmr)
+    lcp = LixFileConverterP(pra, prb)
 
 
     # separate rest of file
@@ -179,13 +336,13 @@ def parse_file_lid_v5(p):
     while 1:
         if i + sl + MML > data_size:
             # real or padded
-            print(f'end at {i}, data_size {data_size}, remain {data_size - i}')
+            # print(f'end at {i}, data_size {data_size}, remain {data_size - i}')
             break
 
         if i % CS == 0:
             need_parse_mini = 1
             i += 8
-            print(f'{i - 8} - {i} (8)')
+            # print(f'{i - 8} - {i} (8)')
 
         if need_parse_mini:
             m = (i // CS) * CS
@@ -200,18 +357,18 @@ def parse_file_lid_v5(p):
             n_post = sl + n_mask - n_pre
             j = i + n_pre + 8
             s = bb[i:i+n_pre] + bb[j:j+n_post]
-            print(f'{i} - {i+n_pre} ({n_pre}) + {j}:{j+n_post} ({n_post})')
+            # print(f'{i} - {i+n_pre} ({n_pre}) + {j}:{j+n_post} ({n_post})')
             j += n_post
             need_parse_mini = 1
         else:
             j = i + n_mask + sl
             s = bb[i:j]
-            print(f'{i} - {j} ({j - i})')
+            # print(f'{i} - {j} ({j - i})')
             need_parse_mini = 0
 
 
         # sample second
-        _parse_sample(s[n_mask:], t, f_csv)
+        _parse_sample(s[n_mask:], t, f_csv, lct, lcp, prc, prd)
         i = j
 
     f_csv.close()

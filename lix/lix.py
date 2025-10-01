@@ -29,7 +29,7 @@ def _p(s):
 
 
 
-def _lix_mah_start_time_to_seconds(s: str) -> int:
+def _time_mah_str_to_seconds(s: str) -> int:
     # s: '231103190012' embedded in macro_header
     dt = datetime.datetime.strptime(s, "%y%m%d%H%M%S")
     # set dt as UTC since objects are 'naive' by default
@@ -41,7 +41,7 @@ def _lix_mah_start_time_to_seconds(s: str) -> int:
 
 
 
-def _lix_mah_time_to_str(b: bytes) -> str:
+def _time_bytes_to_str(b: bytes) -> str:
     # b: b'\x24\x01\x31\x12\x34\x56'
     s = ''
     for v in b:
@@ -50,11 +50,6 @@ def _lix_mah_time_to_str(b: bytes) -> str:
         s += f'{high}{low}'
     # s: '240131123456'
     return s
-
-
-
-def _lix_raw_sensor_measurement_to_int(x):
-    return int.from_bytes(x, "big")
 
 
 
@@ -69,11 +64,16 @@ def _decode_sensor_measurement(s, x):
         return c2
 
     # big endian to int
-    v = _lix_raw_sensor_measurement_to_int(x)
+    v = int.from_bytes(x, "big")
     if 'A' in s:
         # v: 65515
         v = _c2_to_decimal(v)
     return v
+
+
+
+def decode_accelerometer_measurement(x):
+    return _decode_sensor_measurement('A', x)
 
 
 
@@ -115,7 +115,7 @@ def _parse_macro_header(bb):
     # display all this info
     _p(f"\n\tMACRO header \t|  logger type {file_type.decode()}")
     _p(f"\tfile version \t|  {file_version}")
-    timestamp_str = _lix_mah_time_to_str(timestamp)
+    timestamp_str = _time_bytes_to_str(timestamp)
 
     _p(f"\tdatetime is   \t|  {timestamp_str}")
     bat = int.from_bytes(battery, "big")
@@ -155,7 +155,7 @@ def _parse_macro_header(bb):
 
     # get first time ever
     global g_epoch
-    g_epoch = _lix_mah_start_time_to_seconds(timestamp_str)
+    g_epoch = _time_mah_str_to_seconds(timestamp_str)
     print('g_epoch', g_epoch)
 
 
@@ -251,15 +251,15 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
 
 
 
+class ExceptionLixFileConversion(Exception):
+    pass
 
 
 
-def parse_file_lid_v5(p):
-    i = 0
-    need_parse_mini = 1
 
+def parse_lid_v2_data_file(p):
 
-    # read the whole data file
+    # read ALL the bytes in the data file
     with open(p, 'rb') as f:
         bb = f.read()
     bn = os.path.basename(p)
@@ -268,15 +268,14 @@ def parse_file_lid_v5(p):
 
     # know real size of file by subtracting last padding
     n_pad = bb[-253]
-    file_size = raw_file_size - 256 + (256 - n_pad)
+    # file_size = raw_file_size - 256 + (256 - n_pad)
+    file_size = raw_file_size - n_pad
     print(f'{bn}, raw size {raw_file_size}, real size {file_size}')
 
 
     # separate macro_header
     bb_macro_header = bb[:CS]
     _parse_macro_header(bb_macro_header)
-    global g_last_ct
-    g_last_ct = 0
 
 
     # get variables depending on logger type
@@ -302,15 +301,18 @@ def parse_file_lid_v5(p):
         sl = 6
         suffix = 'DissolvedOxygen'
     else:
-        sys.exit(1)
+        e = 'lix: parse_lid_v2_data_file, cannot get logger type'
+        raise ExceptionLixFileConversion(e)
 
 
-    # start CSV file
+    # start CSV file with its column titles
     path_csv = p.replace('.lid', f'_{suffix}.csv')
     print(f'output csv file = {path_csv}')
     f_csv = open(path_csv, 'w')
     f_csv.write(csv_column_titles)
 
+
+    # todo: branch depending on logger type here
 
     # grab the cc area in the macro_header
     cc_area = bb[13: 13 + LEN_LIX_FILE_CC_AREA]
@@ -327,12 +329,19 @@ def parse_file_lid_v5(p):
     lcp = LixFileConverterP(pra, prb)
 
 
-    # separate rest of file
+    # separate DATA section from rest of file
     bb = bb[CS:-n_pad]
     data_size = len(bb)
 
 
-    # parse it measurement by measurement
+    # initialize variables to parse data section
+    global g_last_ct
+    g_last_ct = 0
+    i = 0
+    need_parse_mini = 1
+
+
+    # parse data measurement by measurement
     while 1:
         if i + sl + MML > data_size:
             # real or padded
@@ -349,7 +358,7 @@ def parse_file_lid_v5(p):
             _parse_mini_header(bb[m:m+8])
 
 
-        # mask first
+        # parse mask first
         n_mask, t = _parse_mask(bb[i:i+2])
 
         if (i % CS) + n_mask + sl > CS:
@@ -367,7 +376,7 @@ def parse_file_lid_v5(p):
             need_parse_mini = 0
 
 
-        # sample second
+        # parse sample after mask
         _parse_sample(s[n_mask:], t, f_csv, lct, lcp, prc, prd)
         i = j
 
@@ -379,7 +388,5 @@ def parse_file_lid_v5(p):
     sp.run(c, shell=True)
 
 
-
-
-
-    
+    # success
+    return 0

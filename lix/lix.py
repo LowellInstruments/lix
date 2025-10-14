@@ -384,8 +384,8 @@ def parse_lid_v2_data_file(p):
 
 
     # useful during development, copy converted file here
-    c = f'cp {path_csv} .'
-    sp.run(c, shell=True)
+    # c = f'cp {path_csv} .'
+    # sp.run(c, shell=True)
 
 
     # success

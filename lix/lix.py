@@ -342,6 +342,7 @@ def parse_lid_v2_data_file(p):
 
 
     # parse data measurement by measurement
+    nm = 0
     while 1:
         if i + sl + MML > data_size:
             # real or padded
@@ -361,6 +362,10 @@ def parse_lid_v2_data_file(p):
         # parse mask first
         n_mask, t = _parse_mask(bb[i:i+2])
 
+        if t == 0 and nm > 0:
+            print(f'finished parsing file: {nm} samples')
+            break
+
         if (i % CS) + n_mask + sl > CS:
             n_pre = CS - (i % CS)
             n_post = sl + n_mask - n_pre
@@ -379,6 +384,9 @@ def parse_lid_v2_data_file(p):
         # parse sample after mask
         _parse_sample(s[n_mask:], t, f_csv, lct, lcp, prc, prd)
         i = j
+
+        # number of measurements
+        nm += 1
 
     f_csv.close()
 

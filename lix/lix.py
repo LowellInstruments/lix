@@ -246,7 +246,15 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
         c1 = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
         c2 = int.from_bytes(bb_c[4:6], byteorder='big', signed=False)
         c3 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
-        fo.write(f'{t},{rt},{vt},{rp},{ac_x},{ac_y},{ac_z},{c0},{c1},{c2},{c3}\n')
+        if MORE_COLUMNS:
+            # et: elapsed time
+            et = t
+            # ct: cumulative time
+            s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
+                f'{cpd},{vax},{vay},{vaz},{c0},{c1},{c2},{c3}\n'
+            fo.write(s)
+        else:
+            fo.write(f'{t_str},{vt},{rpd},{vax},{vay},{vaz},{c0},{c1},{c2},{c3}\n')
 
 
 
@@ -259,14 +267,14 @@ class ExceptionLixFileConversion(Exception):
 
 def parse_lid_v2_data_file(p):
 
-    # read ALL the bytes in the data file
+    # read ALL bytes in LID data file
     with open(p, 'rb') as f:
         bb = f.read()
     bn = os.path.basename(p)
     raw_file_size = len(bb)
 
 
-    # know real size of file by subtracting last padding
+    # know real size of LID file by subtracting last padding
     n_pad = bb[-253]
     # file_size = raw_file_size - 256 + (256 - n_pad)
     file_size = raw_file_size - n_pad
@@ -279,9 +287,6 @@ def parse_lid_v2_data_file(p):
 
 
     # get variables depending on logger type
-    sl = 0
-    csv_column_titles = ''
-    suffix = ''
     if g_glt == 'TDO':
         sl = 10
         csv_column_titles = 'ISO 8601 Time,' \
@@ -294,7 +299,13 @@ def parse_lid_v2_data_file(p):
         suffix = 'TDO'
     elif g_glt == 'CTD':
         sl = 18
-        csv_column_titles = f't,temp,temp(c),pres,Ax,Ay,Az,c0,c1,c2,c3\n'
+        csv_column_titles = 'ISO 8601 Time,' \
+               'Temperature (C),Pressure (dbar),Ax,Ay,Az,c0,c1,c2,c3\n'
+        if MORE_COLUMNS:
+            csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
+                   'raw ADC Temp,raw ADC Pressure,' \
+                   'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
+                   'Compensated Pressure (dbar),Ax,Ay,Az,c0,c1,c2,c3\n'
         suffix = 'CTD'
     elif g_glt.startswith('DO'):
         csv_column_titles = f'dotheseones'

@@ -242,19 +242,19 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
 
     if g_glt == 'CTD':
         bb_c = bb[10:]
-        c0 = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
-        c1 = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
-        c2 = int.from_bytes(bb_c[4:6], byteorder='big', signed=False)
-        c3 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
+        c2c1 = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
+        c1c2 = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
+        v1v2 = int.from_bytes(bb_c[4:6], byteorder='big', signed=False)
+        v2v1 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
         if MORE_COLUMNS:
             # et: elapsed time
             et = t
             # ct: cumulative time
             s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
-                f'{cpd},{vax},{vay},{vaz},{c0},{c1},{c2},{c3}\n'
+                f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1}\n'
             fo.write(s)
         else:
-            fo.write(f'{t_str},{vt},{rpd},{vax},{vay},{vaz},{c0},{c1},{c2},{c3}\n')
+            fo.write(f'{t_str},{vt},{rpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1}\n')
 
 
 
@@ -300,12 +300,12 @@ def parse_lid_v2_data_file(p):
     elif g_glt == 'CTD':
         sl = 18
         csv_column_titles = 'ISO 8601 Time,' \
-               'Temperature (C),Pressure (dbar),Ax,Ay,Az,c0,c1,c2,c3\n'
+               'Temperature (C),Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1\n'
         if MORE_COLUMNS:
             csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
                    'raw ADC Temp,raw ADC Pressure,' \
                    'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
-                   'Compensated Pressure (dbar),Ax,Ay,Az,c0,c1,c2,c3\n'
+                   'Compensated Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1\n'
         suffix = 'CTD'
     elif g_glt.startswith('DO'):
         csv_column_titles = f'dotheseones'

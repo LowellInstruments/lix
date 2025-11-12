@@ -245,7 +245,7 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
         v1v2 = int.from_bytes(bb_c[4:6], byteorder='big', signed=False)
         v2v1 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
         if v1v2 + v2v1 == 0:
-            s = f'v1v2 + v2v1 == 0, skipping this sample'
+            s = f'warning, v1v2 + v2v1 == 0, skipping this sample'
             print(f"\033[93m{s}\033[0m")
             return
 
@@ -381,6 +381,7 @@ def parse_lid_v2_data_file(p):
         n_mask, t = _parse_mask(bb[i:i+2])
 
         if t == 0 and nm > 0:
+            # useful to detect badly finished files when memory errors
             print(f'finished parsing file: {nm} samples')
             break
 

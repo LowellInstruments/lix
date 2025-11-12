@@ -1,7 +1,5 @@
 import datetime
 import os
-import subprocess as sp
-import sys
 from lix.ascii85 import ascii85_to_num as a2n
 from lix.pressure import LixFileConverterP, prf_compensate_pressure
 from lix.temperature import LixFileConverterT
@@ -122,7 +120,7 @@ def _parse_macro_header(bb):
     _p("\tbattery level \t|  0x{:04x} = {} mV".format(bat, bat))
     _p(f"\theader index \t|  {hdr_idx}")
     if b"00004" != cc_area[:5]:
-        return {}
+        return
     _p("\tcc_area \t\t|  detected")
     pad = '\t\t\t\t\t   '
     _p(f'{pad}tmr = {a2n(cc_area[10:15].decode())}')
@@ -246,6 +244,11 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
         c1c2 = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
         v1v2 = int.from_bytes(bb_c[4:6], byteorder='big', signed=False)
         v2v1 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
+        if v1v2 + v2v1 == 0:
+            s = f'v1v2 + v2v1 == 0, skipping this sample'
+            print(f"\033[91m{s}\033[0m")
+            return
+
         ratio_cv = '{:.4f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
         if MORE_COLUMNS:
             # et: elapsed time
@@ -324,21 +327,24 @@ def parse_lid_v2_data_file(p):
     f_csv.write(csv_column_titles)
 
 
-    # todo: branch depending on logger type here
-
     # grab the cc area in the macro_header
-    cc_area = bb[13: 13 + LEN_LIX_FILE_CC_AREA]
-    tmr = a2n(cc_area[10:15].decode())
-    tma = a2n(cc_area[15:20].decode())
-    tmb = a2n(cc_area[20:25].decode())
-    tmc = a2n(cc_area[25:30].decode())
-    tmd = a2n(cc_area[30:35].decode())
-    pra = a2n(cc_area[125:130].decode())
-    prb = a2n(cc_area[130:135].decode())
-    prc = float(cc_area[135:140].decode()) / 100
-    prd = float(cc_area[140:145].decode()) / 100
-    lct = LixFileConverterT(tma, tmb, tmc, tmd, tmr)
-    lcp = LixFileConverterP(pra, prb)
+    lct = 0
+    lcp = 0
+    prc = 0
+    prd = 0
+    if g_glt in ('TDO', 'CTD'):
+        cc_area = bb[13: 13 + LEN_LIX_FILE_CC_AREA]
+        tmr = a2n(cc_area[10:15].decode())
+        tma = a2n(cc_area[15:20].decode())
+        tmb = a2n(cc_area[20:25].decode())
+        tmc = a2n(cc_area[25:30].decode())
+        tmd = a2n(cc_area[30:35].decode())
+        pra = a2n(cc_area[125:130].decode())
+        prb = a2n(cc_area[130:135].decode())
+        prc = float(cc_area[135:140].decode()) / 100
+        prd = float(cc_area[140:145].decode()) / 100
+        lct = LixFileConverterT(tma, tmb, tmc, tmd, tmr)
+        lcp = LixFileConverterP(pra, prb)
 
 
     # separate DATA section from rest of file

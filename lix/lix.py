@@ -246,7 +246,7 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
         v2v1 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
         if v1v2 + v2v1 == 0:
             s = f'v1v2 + v2v1 == 0, skipping this sample'
-            print(f"\033[91m{s}\033[0m")
+            print(f"\033[93m{s}\033[0m")
             return
 
         ratio_cv = '{:.4f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))

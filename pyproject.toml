@@ -8,4 +8,5 @@ name = "lix"
 version = "0.1.1"
 description = "LIX library for Lowell Instruments"
 dependencies = [
+    'gsw'
 ]

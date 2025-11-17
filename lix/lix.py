@@ -4,6 +4,7 @@ from lix.ascii85 import ascii85_to_num as a2n
 from lix.pressure import LixFileConverterP, prf_compensate_pressure
 from lix.temperature import LixFileConverterT
 from dateutil.tz import tzlocal, tzutc
+import gsw
 
 
 
@@ -250,14 +251,22 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
             return
 
         ratio_cv = '{:.4f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
+
+
+        # calculate psu
+        hardcoded_cell_constant = 2.0
+        conductivity = float(ratio_cv) * hardcoded_cell_constant
+        psu = gsw.conversions.SP_from_C(conductivity, float(vt), float(cpd))
+        print(f"Salinity: {psu} psu")
+
         if MORE_COLUMNS:
             # et: elapsed time
             et = t
             # ct: cumulative time
             s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
-                f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},{ratio_cv}\n'
+                f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},{ratio_cv},{psu}\n'
         else:
-            s = f'{t_str},{vt},{rpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},{ratio_cv}\n'
+            s = f'{t_str},{vt},{rpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},{ratio_cv},{psu}\n'
         fo.write(s)
 
 
@@ -304,12 +313,12 @@ def parse_lid_v2_data_file(p):
     elif g_glt == 'CTD':
         sl = 18
         csv_column_titles = 'ISO 8601 Time,' \
-               'Temperature (C),Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv\n'
+               'Temperature (C),Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,Salinity (psu)\n'
         if MORE_COLUMNS:
             csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
                    'raw ADC Temp,raw ADC Pressure,' \
                    'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
-                   'Compensated Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv\n'
+                   'Compensated Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,Salinity (psu)\n'
         suffix = 'CTD'
     elif g_glt.startswith('DO'):
         csv_column_titles = f'dotheseones'

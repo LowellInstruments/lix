@@ -254,7 +254,7 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
 
 
         # calculate psu
-        hardcoded_cell_constant = 2.0
+        hardcoded_cell_constant = .6
         conductivity = float(ratio_cv) * hardcoded_cell_constant
         psu = gsw.conversions.SP_from_C(conductivity, float(vt), float(cpd))
         print(f"Salinity: {psu} psu")

@@ -1,9 +1,9 @@
+from lix.ascii85 import ascii85_to_num, num_to_ascii85
 from lix.lix import parse_lid_v2_data_file
 
 
 if __name__ == '__main__':
-    path = "C:\\Users\\joaqu\\Downloads\\dl_lil_v5\\3000003_BIL_20251117_165821.lid"
+    path = "/home/kaz/Downloads/dl_bil_v5/3000004_BIL_20251201_185757.lid"
     parse_lid_v2_data_file(path)
-    print('.')
 
 

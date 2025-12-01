@@ -183,7 +183,7 @@ def _parse_mask(bb):
     return lm, t
 
 
-def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
+def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
 
     # rt:  temperature raw ADC counts
     # rp:  pressure raw ADC counts
@@ -252,6 +252,9 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd):
 
         ratio_cv = '{:.4f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
 
+        # -------------------------------
+        # todo: CQA, CQB, CQC used here
+        # -------------------------------
 
         # calculate psu
         hardcoded_cell_constant = .6
@@ -278,7 +281,7 @@ class ExceptionLixFileConversion(Exception):
 
 
 
-def parse_lid_v2_data_file(p):
+def _parse_lid_v2_data_file_v2_and_up(p):
 
     # read ALL bytes in LID data file
     with open(p, 'rb') as f:
@@ -297,6 +300,7 @@ def parse_lid_v2_data_file(p):
     # separate macro_header
     bb_macro_header = bb[:CS]
     _parse_macro_header(bb_macro_header)
+    file_version = bb_macro_header[3]
 
 
     # get variables depending on logger type
@@ -325,7 +329,7 @@ def parse_lid_v2_data_file(p):
         sl = 6
         suffix = 'DissolvedOxygen'
     else:
-        e = 'lix: parse_lid_v2_data_file, cannot get logger type'
+        e = 'lix: _parse_lid_v2_data_file_v2_and_up, cannot get logger type'
         raise ExceptionLixFileConversion(e)
 
 
@@ -354,6 +358,20 @@ def parse_lid_v2_data_file(p):
         prd = float(cc_area[140:145].decode()) / 100
         lct = LixFileConverterT(tma, tmb, tmc, tmd, tmr)
         lcp = LixFileConverterP(pra, prb)
+
+
+
+    # grab CTD constants on newer file versions
+    cqa = cqb = cqc = 0
+    if g_glt == 'CTD' and file_version >= 3:
+        cq_area = bb[13 + LEN_LIX_FILE_CC_AREA: 13 + LEN_LIX_FILE_CC_AREA + 15]
+        cqa = a2n(cq_area[0:5].decode())
+        cqb = a2n(cq_area[5:10].decode())
+        cqc = a2n(cq_area[10:15].decode())
+        print(f'debug cqa = {cqa} = {cq_area[0:5]}')
+        print(f'debug cqb = {cqb} = {cq_area[5:10]}')
+        print(f'debug cqc = {cqc} = {cq_area[10:15]}')
+
 
 
     # separate DATA section from rest of file
@@ -410,7 +428,11 @@ def parse_lid_v2_data_file(p):
 
 
         # parse sample after mask
-        _parse_sample(s[n_mask:], t, f_csv, lct, lcp, prc, prd)
+        _parse_sample(
+            s[n_mask:], t, f_csv,
+            lct, lcp, prc, prd,
+            cqa, cqb, cqc
+        )
         i = j
 
         # number of measurements
@@ -422,7 +444,13 @@ def parse_lid_v2_data_file(p):
     # useful during development, copy converted file here
     # c = f'cp {path_csv} .'
     # sp.run(c, shell=True)
+    print(f'number of samples converted = {nm}')
 
 
     # success
     return 0
+
+
+
+def parse_lid_v2_data_file(p):
+    return _parse_lid_v2_data_file_v2_and_up(p)

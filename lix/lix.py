@@ -252,24 +252,26 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
 
         ratio_cv = '{:.4f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
 
-        # -------------------------------
-        # todo: CQA, CQB, CQC used here
-        # -------------------------------
+        # calculate teos_10
+        conductivity_s_m = (cqa * float(ratio_cv) * float(ratio_cv)) + (cqb * float(ratio_cv)) + cqc
+        print('conductivity s_m', conductivity_s_m)
 
-        # calculate psu
-        hardcoded_cell_constant = .6
-        conductivity = float(ratio_cv) * hardcoded_cell_constant
-        psu = gsw.conversions.SP_from_C(conductivity, float(vt), float(cpd))
-        print(f"Salinity: {psu} psu")
+        # units need to be mS/cm (not S/m).
+        conductivity_ms_cm = conductivity_s_m * 10
+
+        teos_10 = gsw.conversions.SP_from_C(conductivity_ms_cm, float(vt), float(cpd))
+        print(f"Salinity: {teos_10} TEOS-10")
 
         if MORE_COLUMNS:
             # et: elapsed time
             et = t
             # ct: cumulative time
             s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
-                f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},{ratio_cv},{psu}\n'
+                f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},' \
+                f'{ratio_cv},{conductivity_ms_cm:.4f},{teos_10:.4f}\n'
         else:
-            s = f'{t_str},{vt},{rpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},{ratio_cv},{psu}\n'
+            s = (f'{t_str},{vt},{rpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},'
+                 f'{ratio_cv},{conductivity_ms_cm:.4f},{teos_10:.4f}\n')
         fo.write(s)
 
 
@@ -282,6 +284,11 @@ class ExceptionLixFileConversion(Exception):
 
 
 def _parse_lid_v2_data_file_v2_and_up(p):
+
+    if not p or not p.endswith('.lid'):
+        print(f'error, filename {p} does not end in .lid')
+        return 1
+
 
     # read ALL bytes in LID data file
     with open(p, 'rb') as f:
@@ -317,19 +324,21 @@ def _parse_lid_v2_data_file_v2_and_up(p):
     elif g_glt == 'CTD':
         sl = 18
         csv_column_titles = 'ISO 8601 Time,' \
-               'Temperature (C),Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,Salinity (psu)\n'
+                'Temperature (C),Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,'\
+                'Conductivity (mS/cm),Salinity (TEOS-10)\n'
         if MORE_COLUMNS:
             csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
                    'raw ADC Temp,raw ADC Pressure,' \
                    'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
-                   'Compensated Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,Salinity (psu)\n'
+                   'Compensated Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,'\
+                   'Conductivity (mS/cm),Salinity (TEOS-10)\n'
         suffix = 'CTD'
     elif g_glt.startswith('DO'):
         csv_column_titles = f'dotheseones'
         sl = 6
         suffix = 'DissolvedOxygen'
     else:
-        e = 'lix: _parse_lid_v2_data_file_v2_and_up, cannot get logger type'
+        e = f'lix: _parse_lid_v2_data_file_v2_and_up, cannot get logger type = {g_glt}'
         raise ExceptionLixFileConversion(e)
 
 
@@ -368,9 +377,9 @@ def _parse_lid_v2_data_file_v2_and_up(p):
         cqa = a2n(cq_area[0:5].decode())
         cqb = a2n(cq_area[5:10].decode())
         cqc = a2n(cq_area[10:15].decode())
-        print(f'debug cqa = {cqa} = {cq_area[0:5]}')
-        print(f'debug cqb = {cqb} = {cq_area[5:10]}')
-        print(f'debug cqc = {cqc} = {cq_area[10:15]}')
+        # print(f'debug cqa = {cqa} = {cq_area[0:5]}')
+        # print(f'debug cqb = {cqb} = {cq_area[5:10]}')
+        # print(f'debug cqc = {cqc} = {cq_area[10:15]}')
 
 
 

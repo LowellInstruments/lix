@@ -152,6 +152,7 @@ def _parse_macro_header(bb):
     _p(f'{pad}dso = {dso}')
     _p(f'{pad}dsu = {dsu}')
 
+
     # get first time ever
     global g_epoch
     g_epoch = _time_mah_str_to_seconds(timestamp_str)
@@ -183,6 +184,7 @@ def _parse_mask(bb):
     return lm, t
 
 
+
 def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
 
     # rt:  temperature raw ADC counts
@@ -194,9 +196,6 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
     rt = ''
     rp = ''
     cp = ''
-    ac_x = ''
-    ac_y = ''
-    ac_z = ''
     vt = ''
     rpd = ''
     cpd = ''
@@ -229,9 +228,8 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
 
     if g_glt == 'TDO':
         if MORE_COLUMNS:
-            # et: elapsed time
+            # et: elapsed time, ct: cumulative time
             et = t
-            # ct: cumulative time
             s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
                 f'{cpd},{vax},{vay},{vaz}\n'
             fo.write(s)
@@ -250,22 +248,19 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
             print(f"\033[93m{s}\033[0m")
             return
 
-        ratio_cv = '{:.4f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
 
-        # calculate teos_10
+        # calculate teos_10 in mS/cm, not S/m
+        ratio_cv = '{:.4f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
         conductivity_s_m = (cqa * float(ratio_cv) * float(ratio_cv)) + (cqb * float(ratio_cv)) + cqc
         print('conductivity s_m', conductivity_s_m)
-
-        # units need to be mS/cm (not S/m).
         conductivity_ms_cm = conductivity_s_m * 10
-
         teos_10 = gsw.conversions.SP_from_C(conductivity_ms_cm, float(vt), float(cpd))
         print(f"Salinity: {teos_10} TEOS-10")
 
+
         if MORE_COLUMNS:
-            # et: elapsed time
+            # et: elapsed time, ct: cumulative time
             et = t
-            # ct: cumulative time
             s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
                 f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},' \
                 f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n'
@@ -321,6 +316,7 @@ def _parse_lid_v2_data_file_and_newer(p):
                    'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
                    'Compensated Pressure (dbar),Ax,Ay,Az\n'
         suffix = 'TDO'
+
     elif g_glt == 'CTD':
         sl = 18
         csv_column_titles = 'ISO 8601 Time,' \
@@ -333,10 +329,12 @@ def _parse_lid_v2_data_file_and_newer(p):
                    'Compensated Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,'\
                    'Conductivity (mS/cm),Salinity (TEOS-10)\n'
         suffix = 'CTD'
+
     elif g_glt.startswith('DO'):
         csv_column_titles = f'dotheseones'
         sl = 6
         suffix = 'DissolvedOxygen'
+
     else:
         e = f'lix: _parse_lid_v2_data_file_v2_and_up, cannot get logger type = {g_glt}'
         raise ExceptionLixFileConversion(e)
@@ -413,7 +411,7 @@ def _parse_lid_v2_data_file_and_newer(p):
             _parse_mini_header(bb[m:m+8])
 
 
-        # parse mask first
+        # step 1) parse mask
         n_mask, t = _parse_mask(bb[i:i+2])
 
         if t == 0 and nm > 0:
@@ -421,6 +419,7 @@ def _parse_lid_v2_data_file_and_newer(p):
             print(f'finished parsing file: {nm} samples')
             break
 
+        # does current measurement fit in the current chunk
         if (i % CS) + n_mask + sl > CS:
             n_pre = CS - (i % CS)
             n_post = sl + n_mask - n_pre
@@ -436,7 +435,7 @@ def _parse_lid_v2_data_file_and_newer(p):
             need_parse_mini = 0
 
 
-        # parse sample after mask
+        # step 2) parse sample 's'
         _parse_sample(
             s[n_mask:], t, f_csv,
             lct, lcp, prc, prd,
@@ -453,10 +452,10 @@ def _parse_lid_v2_data_file_and_newer(p):
     # useful during development, copy converted file here
     # c = f'cp {path_csv} .'
     # sp.run(c, shell=True)
-    print(f'number of samples converted = {nm}')
 
 
     # success
+    print(f'number of samples converted = {nm}')
     return 0
 
 

@@ -283,7 +283,7 @@ class ExceptionLixFileConversion(Exception):
 
 
 
-def _parse_lid_v2_data_file_v2_and_up(p):
+def _parse_lid_v2_data_file_and_newer(p):
 
     if not p or not p.endswith('.lid'):
         print(f'error, filename {p} does not end in .lid')
@@ -462,4 +462,4 @@ def _parse_lid_v2_data_file_v2_and_up(p):
 
 
 def parse_lid_v2_data_file(p):
-    return _parse_lid_v2_data_file_v2_and_up(p)
+    return _parse_lid_v2_data_file_and_newer(p)

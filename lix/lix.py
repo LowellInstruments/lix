@@ -9,13 +9,13 @@ import gsw
 
 
 # file size, sample length, min. mask length, chunk size
-MML = 1
 CS = 256
 MASK_TIME_EXTENDED = 0x40
 g_glt = ''
 LEN_LIX_FILE_CC_AREA = 5 * 33
 LEN_LIX_FILE_CF_AREA = 5 * 9
 LEN_LIX_FILE_CONTEXT = 64
+LEN_LIX_FILE_CONTEXT_V3 = 48
 MORE_COLUMNS = 1
 g_epoch = 0
 g_last_ct = 0
@@ -76,6 +76,17 @@ def decode_accelerometer_measurement(x):
 
 
 
+def do16_to_float(d):
+    # d: 0x8003
+    sign = bool(d & 0x8000)
+    v = d & 0x7FFF
+    f = v * 0.01
+    if sign:
+        f *= -1
+    return f
+
+
+
 def _parse_macro_header(bb):
     global g_glt
     g_glt = ''
@@ -87,9 +98,38 @@ def _parse_macro_header(bb):
     hdr_idx = bb[12]
     # HSA macro-header must match firmware hsa.h
     i_mah = 13
-    cc_area = bb[i_mah: i_mah + LEN_LIX_FILE_CC_AREA]
-    # context
-    i = CS - LEN_LIX_FILE_CONTEXT
+
+
+    # display all this info
+    _p(f"\n\tMACRO header \t|  logger type {file_type.decode()}")
+    _p(f"\tfile version \t|  {file_version}")
+    timestamp_str = _time_bytes_to_str(timestamp)
+    _p(f"\tdatetime is   \t|  {timestamp_str}")
+    bat = int.from_bytes(battery, "big")
+    _p("\tbattery level \t|  0x{:04x} = {} mV".format(bat, bat))
+    _p(f"\theader index \t|  {hdr_idx}")
+
+
+    # get first time ever
+    global g_epoch
+    g_epoch = _time_mah_str_to_seconds(timestamp_str)
+    # print('g_epoch', g_epoch)
+
+
+    # -----------------------------------
+    # macro_header
+    # -----------------------------------
+    #
+    # 0..13 general info
+    # cc_area (165 bytes)
+    # cq_area (15 bytes)
+
+
+    # CONTEXT area
+    if file_version == 2:
+        i = CS - LEN_LIX_FILE_CONTEXT
+    else:
+        i = CS - LEN_LIX_FILE_CONTEXT_V3
     gfv = bb[i:i + 4]
     i += 4
     rvn = bb[i]
@@ -111,19 +151,19 @@ def _parse_macro_header(bb):
     i += 5
     dsu = bb[i:i + 5].decode()
 
-    # display all this info
-    _p(f"\n\tMACRO header \t|  logger type {file_type.decode()}")
-    _p(f"\tfile version \t|  {file_version}")
-    timestamp_str = _time_bytes_to_str(timestamp)
+    pad = '\t\t\t\t\t   '
+    _p("\tcontext \t\t|  detected")
+    _p(f'{pad}gfv = {gfv}')
+    if g_glt.startswith('DO'):
+        return
 
-    _p(f"\tdatetime is   \t|  {timestamp_str}")
-    bat = int.from_bytes(battery, "big")
-    _p("\tbattery level \t|  0x{:04x} = {} mV".format(bat, bat))
-    _p(f"\theader index \t|  {hdr_idx}")
+
+    # CC area
+    cc_area = bb[i_mah: i_mah + LEN_LIX_FILE_CC_AREA]
     if b"00004" != cc_area[:5]:
+        print('warning: no CC area detected')
         return
     _p("\tcc_area \t\t|  detected")
-    pad = '\t\t\t\t\t   '
     _p(f'{pad}tmr = {a2n(cc_area[10:15].decode())}')
     _p(f'{pad}tma = {a2n(cc_area[15:20].decode())}')
     _p(f'{pad}tmb = {a2n(cc_area[20:25].decode())}')
@@ -151,13 +191,6 @@ def _parse_macro_header(bb):
     _p(f'{pad}drf = {drf}')
     _p(f'{pad}dso = {dso}')
     _p(f'{pad}dsu = {dsu}')
-
-
-    # get first time ever
-    global g_epoch
-    g_epoch = _time_mah_str_to_seconds(timestamp_str)
-    print('g_epoch', g_epoch)
-
 
 
 
@@ -238,6 +271,7 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
 
 
     if g_glt == 'CTD':
+        # we skip T, P, Accelerometer samples
         bb_c = bb[10:]
         c2c1 = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
         c1c2 = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
@@ -268,6 +302,37 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
             s = (f'{t_str},{vt},{rpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},'
                  f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
         fo.write(s)
+
+
+
+def _parse_sample_dox(bb, ts, fo):
+    is_do2 = g_glt == 'DO2'
+    dos = do16_to_float(int.from_bytes(bb[0:2], "big"))
+    dop = do16_to_float(int.from_bytes(bb[2:4], "big"))
+    dot = do16_to_float(int.from_bytes(bb[4:6], "big"))
+    wat = 0
+    if is_do2:
+        # wat is directly in mV
+        wat = int.from_bytes(bb[6:8], "big")
+        wat = int((wat / 3000) * 100)
+
+    # only two decimals
+    dos = '{:.2f}'.format(dos)
+    dop = '{:.2f}'.format(dop)
+    dot = '{:.2f}'.format(dot)
+    wat = '{:.2f}'.format(wat)
+
+
+    # ts: seconds
+    t_str = datetime.datetime.utcfromtimestamp(ts).isoformat()
+    t_str = t_str + '.000Z'
+
+
+    if is_do2:
+        s = f'{t_str},{dos},{dop},{dot},{wat}\n'
+    else:
+        s = f'{t_str},{dos},{dop},{dot}\n'
+    fo.write(s)
 
 
 
@@ -305,7 +370,10 @@ def _parse_lid_v2_data_file_and_newer(p):
     file_version = bb_macro_header[3]
 
 
-    # get variables depending on logger type
+    # --------------------------------------------
+    # CSV column titles depending on logger type
+    # --------------------------------------------
+
     if g_glt == 'TDO':
         sl = 10
         csv_column_titles = 'ISO 8601 Time,' \
@@ -331,8 +399,13 @@ def _parse_lid_v2_data_file_and_newer(p):
         suffix = 'CTD'
 
     elif g_glt.startswith('DO'):
-        csv_column_titles = f'dotheseones'
         sl = 6
+        csv_column_titles = 'ISO 8601 Time,' \
+               'Dissolved Oxygen (mg/l),Dissolved Oxygen (%),' \
+               'DO Temperature (C)\n'
+        if g_glt == 'DO2':
+            sl = 8
+            csv_column_titles = csv_column_titles.replace('\n', ',Water Detect (%)\n')
         suffix = 'DissolvedOxygen'
 
     else:
@@ -371,6 +444,7 @@ def _parse_lid_v2_data_file_and_newer(p):
     # grab CTD constants on newer file versions
     cqa = cqb = cqc = 0
     if g_glt == 'CTD' and file_version >= 3:
+        # 15 is the length of the conductivity calibration constants
         cq_area = bb[13 + LEN_LIX_FILE_CC_AREA: 13 + LEN_LIX_FILE_CC_AREA + 15]
         cqa = a2n(cq_area[0:5].decode())
         cqb = a2n(cq_area[5:10].decode())
@@ -378,6 +452,14 @@ def _parse_lid_v2_data_file_and_newer(p):
         # print(f'debug cqa = {cqa} = {cq_area[0:5]}')
         # print(f'debug cqb = {cqb} = {cq_area[5:10]}')
         # print(f'debug cqc = {cqc} = {cq_area[10:15]}')
+
+
+
+    # grab SPT in DOX header
+    spt = 0
+    if g_glt.startswith('DO'):
+        spt = int(bb_macro_header[216:221].decode())
+        print(f'DOX spt = {spt}')
 
 
 
@@ -393,12 +475,18 @@ def _parse_lid_v2_data_file_and_newer(p):
     need_parse_mini = 1
 
 
+    # minimal mask length
+    min_mask_len = 1
+    if g_glt == 'DO2':
+        min_mask_len = 0
+
+
     # parse data measurement by measurement
     nm = 0
     while 1:
-        if i + sl + MML > data_size:
+        if i + sl + min_mask_len > data_size:
             # real or padded
-            # print(f'end at {i}, data_size {data_size}, remain {data_size - i}')
+            # print(f'end at {i}, data_size {data_size}, remain {data_size - i}, sl {sl}')
             break
 
         if i % CS == 0:
@@ -411,37 +499,44 @@ def _parse_lid_v2_data_file_and_newer(p):
             _parse_mini_header(bb[m:m+8])
 
 
-        # step 1) parse mask
-        n_mask, t = _parse_mask(bb[i:i+2])
+        if g_glt in ('TDO', 'CTD'):
+            # step 1) parse TDO / CTD mask
+            n_mask, t = _parse_mask(bb[i:i+2])
 
-        if t == 0 and nm > 0:
-            # useful to detect badly finished files when memory errors
-            print(f'finished parsing file: {nm} samples')
-            break
+            if t == 0 and nm > 0:
+                # useful to detect badly finished files when memory errors
+                print(f'finished parsing file: {nm} samples')
+                break
 
-        # does current measurement fit in the current chunk
-        if (i % CS) + n_mask + sl > CS:
-            n_pre = CS - (i % CS)
-            n_post = sl + n_mask - n_pre
-            j = i + n_pre + 8
-            s = bb[i:i+n_pre] + bb[j:j+n_post]
-            # print(f'{i} - {i+n_pre} ({n_pre}) + {j}:{j+n_post} ({n_post})')
-            j += n_post
-            need_parse_mini = 1
+            # does current measurement fit in the current chunk
+            if (i % CS) + n_mask + sl > CS:
+                n_pre = CS - (i % CS)
+                n_post = sl + n_mask - n_pre
+                j = i + n_pre + 8
+                s = bb[i:i+n_pre] + bb[j:j+n_post]
+                # print(f'{i} - {i+n_pre} ({n_pre}) + {j}:{j+n_post} ({n_post})')
+                j += n_post
+                need_parse_mini = 1
+            else:
+                j = i + n_mask + sl
+                s = bb[i:j]
+                # print(f'{i} - {j} ({j - i})')
+                need_parse_mini = 0
+
+
+            # step 2) parse TDO / CTD sample 's'
+            _parse_sample(
+                s[n_mask:], t, f_csv,
+                lct, lcp, prc, prd,
+                cqa, cqb, cqc
+            )
+            i = j
+
         else:
-            j = i + n_mask + sl
-            s = bb[i:j]
-            # print(f'{i} - {j} ({j - i})')
-            need_parse_mini = 0
-
-
-        # step 2) parse sample 's'
-        _parse_sample(
-            s[n_mask:], t, f_csv,
-            lct, lcp, prc, prd,
-            cqa, cqb, cqc
-        )
-        i = j
+            # DOX loggers have no mask
+            ts = g_epoch + (nm * spt)
+            _parse_sample_dox(bb[i:i+sl], ts, f_csv)
+            i += sl
 
         # number of measurements
         nm += 1
@@ -455,7 +550,7 @@ def _parse_lid_v2_data_file_and_newer(p):
 
 
     # success
-    print(f'number of samples converted = {nm}')
+    print(f'number of {g_glt} samples converted = {nm}')
     return 0
 
 

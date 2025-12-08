@@ -458,7 +458,11 @@ def _parse_lid_v2_data_file_and_newer(p):
     # grab SPT in DOX header
     spt = 0
     if g_glt.startswith('DO'):
-        spt = int(bb_macro_header[216:221].decode())
+        if file_version <= 2:
+            spt = int(bb_macro_header[200:205].decode())
+        else:
+            # >= 3
+            spt = int(bb_macro_header[216:221].decode())
         print(f'DOX spt = {spt}')
 
 

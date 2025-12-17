@@ -263,11 +263,11 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
         if MORE_COLUMNS:
             # et: elapsed time, ct: cumulative time
             et = t
-            s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
+            s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{int(cp)},' \
                 f'{cpd},{vax},{vay},{vaz}\n'
             fo.write(s)
         else:
-            fo.write(f'{t_str},{vt},{rpd},{vax},{vay},{vaz}\n')
+            fo.write(f'{t_str},{vt},{cpd},{vax},{vay},{vaz}\n')
 
 
     if g_glt == 'CTD':

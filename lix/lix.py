@@ -87,7 +87,7 @@ def do16_to_float(d):
 
 
 
-def _parse_macro_header(bb):
+def _parse_macro_header(bb, abs_path_lid=None):
     global g_glt
     g_glt = ''
     g_glt = bb[:3].decode()
@@ -98,6 +98,7 @@ def _parse_macro_header(bb):
     hdr_idx = bb[12]
     # HSA macro-header must match firmware hsa.h
     i_mah = 13
+
 
 
     # display all this info
@@ -191,6 +192,64 @@ def _parse_macro_header(bb):
     _p(f'{pad}drf = {drf}')
     _p(f'{pad}dso = {dso}')
     _p(f'{pad}dsu = {dsu}')
+
+
+
+
+    # create a bit of the new summary file
+    if not abs_path_lid:
+        return
+
+    try:
+        bn = os.path.basename(abs_path_lid)
+        abs_path_sum = abs_path_lid.replace('.lid', '.lih')
+        with open(abs_path_sum, 'w') as f:
+            f.write(f"\nsummary file for {bn}\n")
+            f.write(f"-------------------------------------------------\n\n")
+            f.write(f"logger type  = {g_glt}\n")
+            f.write(f"firmware     = {gfv.decode()}\n")
+            f.write(f"file version = {file_version}\n")
+            f.write(f"timestamp    = {timestamp_str}\n")
+            f.write(f"battery mV   = {bat}\n")
+            f.write(f"\ncalibration\n")
+            f.write(f'\ttmr = {a2n(cc_area[10:15].decode())}\n')
+            f.write(f'\ttma = {a2n(cc_area[15:20].decode())}\n')
+            f.write(f'\ttmb = {a2n(cc_area[20:25].decode())}\n')
+            f.write(f'\ttmc = {a2n(cc_area[25:30].decode())}\n')
+            f.write(f'\ttmd = {a2n(cc_area[30:35].decode())}\n')
+            f.write(f'\tpra = {a2n(cc_area[125:130].decode())}\n')
+            f.write(f'\tprb = {a2n(cc_area[130:135].decode())}\n')
+            # PRC / PRD are not ascii85, also, we need them
+            prc = float(cc_area[135:140].decode()) / 100
+            prd = float(cc_area[140:145].decode()) / 100
+            f.write(f'\tprc = {prc}\n')
+            f.write(f'\tprd = {prd}\n')
+            f.write(f'\tdco = {a2n(cc_area[145:150].decode())}\n')
+            f.write(f'\tnco = {a2n(cc_area[150:155].decode())}\n')
+            f.write(f'\tdhu = {a2n(cc_area[155:160].decode())}\n')
+            f.write(f'\tdcd = {a2n(cc_area[160:165].decode())}\n')
+            f.write(f"\nprofiling\n")
+            f.write(f'\trvn = {rvn}\n')
+            f.write(f'\tpfm = {pfm}\n')
+            f.write(f'\tspn = {spn}\n')
+            f.write(f'\tspt = {spt}\n')
+            f.write(f'\tdro = {dro}\n')
+            f.write(f'\tdru = {dru}\n')
+            f.write(f'\tdrf = {drf}\n')
+            f.write(f'\tdso = {dso}\n')
+            f.write(f'\tdsu = {dsu}\n')
+
+            abs_path_gps = abs_path_lid.replace('.lid', '.gps')
+            if os.path.exists(abs_path_gps):
+                with open(abs_path_gps, 'r') as fg:
+                    s_gps = fg.read()
+                    s_gps = s_gps.split('\n')
+                f.write(f'\nGPS\n')
+                f.write(f'\t{s_gps[0]}\n')
+                f.write(f'\t{s_gps[1]}\n')
+    except (Exception, ) as e:
+        print(f"error when creating header file for {abs_path_lid} -> {e}")
+
 
 
 
@@ -366,7 +425,7 @@ def _parse_lid_v2_data_file_and_newer(p):
 
     # separate macro_header
     bb_macro_header = bb[:CS]
-    _parse_macro_header(bb_macro_header)
+    _parse_macro_header(bb_macro_header, abs_path_lid=p)
     file_version = bb_macro_header[3]
 
 

@@ -194,6 +194,18 @@ def _parse_macro_header(bb, abs_path_lid=None):
     _p(f'{pad}dsu = {dsu}')
 
 
+    # CQ area
+    cqa = cqb = cqc = 0
+    if g_glt == 'CTD' and file_version >= 3:
+        cq_area = bb[13 + LEN_LIX_FILE_CC_AREA: 13 + LEN_LIX_FILE_CC_AREA + 15]
+        cqa = a2n(cq_area[0:5].decode())
+        cqb = a2n(cq_area[5:10].decode())
+        cqc = a2n(cq_area[10:15].decode())
+        _p(f'{pad}cqa = {cqa}')
+        _p(f'{pad}cqb = {cqb}')
+        _p(f'{pad}cqc = {cqc}')
+
+
 
 
     # create a bit of the new summary file
@@ -238,6 +250,13 @@ def _parse_macro_header(bb, abs_path_lid=None):
             f.write(f'\tdrf = {drf}\n')
             f.write(f'\tdso = {dso}\n')
             f.write(f'\tdsu = {dsu}\n')
+
+            if g_glt == 'CTD' and file_version >= 3:
+                f.write(f"\nconductivity\n")
+                f.write(f'\tcqa = {cqa}\n')
+                f.write(f'\tcqb = {cqb}\n')
+                f.write(f'\tcqc = {cqc}\n')
+
 
             abs_path_gps = abs_path_lid.replace('.lid', '.gps')
             if os.path.exists(abs_path_gps):

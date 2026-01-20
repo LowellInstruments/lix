@@ -377,7 +377,7 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
                 f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},' \
                 f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n'
         else:
-            s = (f'{t_str},{vt},{rpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},'
+            s = (f'{t_str},{vt},{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},'
                  f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
         fo.write(s)
 

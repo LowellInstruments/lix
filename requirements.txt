@@ -1,1 +1,3 @@
 gsw
+numpy~=2.0
+python-dateutil

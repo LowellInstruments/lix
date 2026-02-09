@@ -3,10 +3,13 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 
+
 [project]
 name = "lix"
 version = "0.1.2"
 description = "LIX library for Lowell Instruments"
 dependencies = [
-    'gsw'
+    'gsw',
+    'numpy~=2.0',
+    'python-dateutil'
 ]

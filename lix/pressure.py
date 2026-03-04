@@ -10,6 +10,9 @@ DEFAULT_PRC = 0
 DEFAULT_PRD = 0
 
 
+# ------------------------------------------------------
+# LIX does NOT add 10 dbar of atmospheric pressure dbar
+# ------------------------------------------------------
 
 
 class Pressure:

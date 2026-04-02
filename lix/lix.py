@@ -563,12 +563,15 @@ def _parse_lid_v2_data_file_and_newer(p):
         min_mask_len = 0
 
 
+    # --------------------------------------
     # parse data measurement by measurement
+    # --------------------------------------
     nm = 0
     while 1:
         if i + sl + min_mask_len > data_size:
-            # real or padded
-            # print(f'end at {i}, data_size {data_size}, remain {data_size - i}, sl {sl}')
+            print(f'💚 finished {g_glt} file parsing')
+            print(f'\t{nm} samples\n\ti = {i}\n'
+                  f'\tdata_size = {data_size}\n\tsample length = {sl}')
             break
 
         if i % CS == 0:
@@ -582,13 +585,21 @@ def _parse_lid_v2_data_file_and_newer(p):
 
 
         if g_glt in ('TDO', 'CTD'):
+
             # step 1) parse TDO / CTD mask
             n_mask, t = _parse_mask(bb[i:i+2])
 
             if t == 0 and nm > 0:
-                # useful to detect badly finished files when memory errors
-                print(f'finished parsing file: {nm} samples')
-                break
+                if i > data_size - CS:
+                    print(f'💛 early finished {g_glt} file parsing = {nm} samples')
+                    print(f'\t{nm} samples\n\ti = {i}\n'
+                          f'\tdata_size = {data_size}\n\tsample length = {sl}')
+                    break
+                # detect badly finished files or 2 samples in one period
+                print(f'⚫ detected: conversion, t = {t}, i = {i}, z = {data_size}')
+                # we can choose 0 or 1 here
+                t = 0
+
 
             # does current measurement fit in the current chunk
             if (i % CS) + n_mask + sl > CS:
@@ -630,9 +641,6 @@ def _parse_lid_v2_data_file_and_newer(p):
     # c = f'cp {path_csv} .'
     # sp.run(c, shell=True)
 
-
-    # success
-    print(f'number of {g_glt} samples converted = {nm}')
     return 0
 
 

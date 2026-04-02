@@ -597,8 +597,8 @@ def _parse_lid_v2_data_file_and_newer(p):
                     break
                 # detect badly finished files or 2 samples in one period
                 print(f'⚫ detected: conversion, t = {t}, i = {i}, z = {data_size}')
-                # we can choose 0 or 1 here
-                t = 0
+                # we can choose 0 or 1 here, let's do 1 for other people
+                t = 1
 
 
             # does current measurement fit in the current chunk

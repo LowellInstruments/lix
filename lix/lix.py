@@ -5,6 +5,7 @@ from lix.pressure import LixFileConverterP, prf_compensate_pressure
 from lix.temperature import LixFileConverterT
 from dateutil.tz import tzlocal, tzutc
 import gsw
+from lix.utils import scale_battery
 
 
 
@@ -107,7 +108,8 @@ def _parse_macro_header(bb, abs_path_lid=None):
     timestamp_str = _time_bytes_to_str(timestamp)
     _p(f"\tdatetime is   \t|  {timestamp_str}")
     bat = int.from_bytes(battery, "big")
-    _p("\tbattery level \t|  0x{:04x} = {} mV".format(bat, bat))
+    _p("\tbattery level \t|  0x{:04x} = {} mV -> {} mV"
+       .format(bat, bat, scale_battery(bat, g_glt)))
     _p(f"\theader index \t|  {hdr_idx}")
 
 
@@ -218,13 +220,17 @@ def _parse_macro_header(bb, abs_path_lid=None):
         with open(abs_path_sum, 'w') as f:
             f.write(f"\n\n")
             f.write(f"---------------------------------------------------------\n")
-            f.write("header file for data file {bn}\n")
+            f.write(f"header file for data file {bn}\n")
             f.write(f"---------------------------------------------------------\n\n")
-            f.write(f"logger type  = {g_glt}\n")
-            f.write(f"firmware     = {gfv.decode()}\n")
-            f.write(f"file version = {file_version}\n")
-            f.write(f"timestamp    = {timestamp_str}\n")
-            f.write(f"battery mV   = {bat}\n")
+            f.write(f"logger type   = {g_glt}\n")
+            f.write(f"firmware      = {gfv.decode()}\n")
+            f.write(f"file version  = {file_version}\n")
+            try:
+                _my_dt = datetime.datetime.strptime(timestamp_str, "%y%m%d%H%M%S")
+                f.write(f"timestamp     = {_my_dt.strftime("%B. %d, %Y at %H:%M:%S")}\n")
+            except (Exception, ):
+                f.write(f"timestamp     = {timestamp_str}/\n")
+            f.write(f"battery mV    = {scale_battery(bat, g_glt)}\n")
             f.write(f"\ncalibration\n")
             f.write(f'\ttmr = {a2n(cc_area[10:15].decode())}\n')
             f.write(f'\ttma = {a2n(cc_area[15:20].decode())}\n')

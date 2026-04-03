@@ -216,8 +216,10 @@ def _parse_macro_header(bb, abs_path_lid=None):
         bn = os.path.basename(abs_path_lid)
         abs_path_sum = abs_path_lid.replace('.lid', '.lih')
         with open(abs_path_sum, 'w') as f:
-            f.write(f"\nsummary file for {bn}\n")
-            f.write(f"-------------------------------------------------\n\n")
+            f.write(f"\n\n")
+            f.write(f"---------------------------------------------------------\n")
+            f.write("header file for data file {bn}\n")
+            f.write(f"---------------------------------------------------------\n\n")
             f.write(f"logger type  = {g_glt}\n")
             f.write(f"firmware     = {gfv.decode()}\n")
             f.write(f"file version = {file_version}\n")

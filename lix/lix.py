@@ -227,7 +227,7 @@ def _parse_macro_header(bb, abs_path_lid=None):
             f.write(f"file version  = {file_version}\n")
             try:
                 _my_dt = datetime.datetime.strptime(timestamp_str, "%y%m%d%H%M%S")
-                f.write(f"timestamp     = {_my_dt.strftime("%B. %d, %Y at %H:%M:%S")}\n")
+                f.write(f"timestamp     = {_my_dt.strftime('%B. %d, %Y at %H:%M:%S')}\n")
             except (Exception, ):
                 f.write(f"timestamp     = {timestamp_str}/\n")
             f.write(f"battery mV    = {scale_battery(bat, g_glt)}\n")
@@ -576,6 +576,9 @@ def _parse_lid_v2_data_file_and_newer(p):
     # --------------------------------------
     nm = 0
     while 1:
+
+        skip_this_sample = False
+
         if i + sl + min_mask_len > data_size:
             print(f'💚 finished {g_glt} file parsing')
             print(f'\t{nm} samples\n\ti = {i}\n'
@@ -599,14 +602,15 @@ def _parse_lid_v2_data_file_and_newer(p):
 
             if t == 0 and nm > 0:
                 if i > data_size - CS:
+                    # this should NOT happen
                     print(f'💛 early finished {g_glt} file parsing = {nm} samples')
                     print(f'\t{nm} samples\n\ti = {i}\n'
                           f'\tdata_size = {data_size}\n\tsample length = {sl}')
                     break
-                # detect badly finished files or 2 samples in one period
-                print(f'⚫ detected: conversion, t = {t}, i = {i}, z = {data_size}')
-                # we can choose 0 or 1 here, let's do 1 for other people
-                t = 1
+
+                # detect bad memory blocks or 2 samples in one period
+                print(f'⚫ skipped: conversion, t = {t}, i = {i}, z = {data_size}')
+                skip_this_sample = True
 
 
             # does current measurement fit in the current chunk
@@ -626,11 +630,12 @@ def _parse_lid_v2_data_file_and_newer(p):
 
 
             # step 2) parse TDO / CTD sample 's'
-            _parse_sample(
-                s[n_mask:], t, f_csv,
-                lct, lcp, prc, prd,
-                cqa, cqb, cqc
-            )
+            if not skip_this_sample:
+                _parse_sample(
+                    s[n_mask:], t, f_csv,
+                    lct, lcp, prc, prd,
+                    cqa, cqb, cqc
+                )
             i = j
 
         else:

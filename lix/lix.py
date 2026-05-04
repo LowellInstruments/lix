@@ -579,7 +579,7 @@ def _parse_lid_v2_data_file_and_newer(p):
 
         skip_this_sample = False
 
-        if i + sl + min_mask_len > data_size:
+        if i + sl + min_mask_len >= data_size:
             print(f'💚 finished {g_glt} file parsing')
             print(f'\t{nm} samples\n\ti = {i}\n'
                   f'\tdata_size = {data_size}\n\tsample length = {sl}')
@@ -596,8 +596,7 @@ def _parse_lid_v2_data_file_and_newer(p):
 
 
         if g_glt in ('TDO', 'CTD'):
-
-            # step 1) parse TDO / CTD mask
+            # step 1) parse TDO / CTD mask (DOX loggers have no mask)
             n_mask, t = _parse_mask(bb[i:i+2])
 
             if t == 0 and nm > 0:

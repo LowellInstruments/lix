@@ -370,7 +370,7 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
 
 
         # calculate teos_10 in mS/cm, not S/m
-        ratio_cv = '{:.4f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
+        ratio_cv = '{:.6f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
         conductivity_s_m = (cqa * float(ratio_cv) * float(ratio_cv)) + (cqb * float(ratio_cv)) + cqc
         print('conductivity s_m', conductivity_s_m)
         conductivity_ms_cm = conductivity_s_m * 10

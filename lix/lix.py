@@ -591,6 +591,7 @@ def _parse_lid_v2_data_file_and_newer(p):
             # print(f'{i - 8} - {i} (8)')
 
         if need_parse_mini:
+            print(' **** needparsemini', need_parse_mini)
             m = (i // CS) * CS
             _parse_mini_header(bb[m:m+8])
 
@@ -637,11 +638,26 @@ def _parse_lid_v2_data_file_and_newer(p):
                 )
             i = j
 
+
         else:
             # DOX loggers have no mask
             ts = g_epoch + (nm * spt)
-            _parse_sample_dox(bb[i:i+sl], ts, f_csv)
-            i += sl
+
+            # current DOX measurement fit does NOT fit in current chunk
+            if (i % CS) + sl > CS:
+                n_pre = CS - (i % CS)
+                n_post = sl - n_pre
+                j = i + n_pre + 8
+                s = bb[i:i+n_pre] + bb[j:j+n_post]
+                j += n_post
+                need_parse_mini = 1
+            else:
+                j = i + sl
+                s = bb[i:j]
+                need_parse_mini = 0
+
+            _parse_sample_dox(s, ts, f_csv)
+            i = j
 
         # number of measurements
         nm += 1

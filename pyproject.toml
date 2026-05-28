@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lix"
-version = "0.1.2"
+version = "0.1.3"
 description = "LIX library for Lowell Instruments"
 dependencies = [
     'gsw',

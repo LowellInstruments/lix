@@ -501,7 +501,6 @@ def _parse_lid_v2_data_file_and_newer(p):
 
     # start CSV file with its column titles
     path_csv = p.replace('.lid', f'_{suffix}.csv')
-    print(f'output csv file = {path_csv}')
     f_csv = open(path_csv, 'w')
     f_csv.write(csv_column_titles)
 

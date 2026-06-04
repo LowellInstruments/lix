@@ -591,7 +591,7 @@ def _parse_lid_v2_data_file_and_newer(p):
             # print(f'{i - 8} - {i} (8)')
 
         if need_parse_mini:
-            print(' **** needparsemini', need_parse_mini)
+            # print(' **** needparsemini', need_parse_mini)
             m = (i // CS) * CS
             _parse_mini_header(bb[m:m+8])
 

@@ -210,7 +210,7 @@ def _parse_macro_header(bb, abs_path_lid=None):
 
 
 
-    # create a bit of the new summary file
+    # create a bit of the new output download text file
     if not abs_path_lid:
         return
 

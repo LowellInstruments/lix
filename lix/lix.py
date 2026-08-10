@@ -9,6 +9,14 @@ from lix.utils import scale_battery
 
 
 
+
+# versions of files
+FILE_VERSION_V2 = 2
+FILE_VERSION_V3 = 3
+FILE_VERSION_V4 = 4
+
+
+
 # file size, sample length, min. mask length, chunk size
 CS = 256
 MASK_TIME_EXTENDED = 0x40
@@ -20,7 +28,12 @@ LEN_LIX_FILE_CONTEXT_V3 = 48
 MORE_COLUMNS = 1
 g_epoch = 0
 g_last_ct = 0
+g_file_version = 0
 
+
+
+class ExceptionLixFileConversion(Exception):
+    pass
 
 
 def _p(s):
@@ -93,7 +106,11 @@ def _parse_macro_header(bb, abs_path_lid=None):
     g_glt = ''
     g_glt = bb[:3].decode()
     file_type = bb[:3]
+    # v2 has different context length than v3
+    # v4 has different CTD sensor fields to v3 (2 vs 4)
     file_version = bb[3]
+    global g_file_version
+    g_file_version = file_version
     timestamp = bb[4:10]
     battery = bb[10:12]
     hdr_idx = bb[12]
@@ -129,7 +146,7 @@ def _parse_macro_header(bb, abs_path_lid=None):
 
 
     # CONTEXT area
-    if file_version == 2:
+    if file_version == FILE_VERSION_V2:
         i = CS - LEN_LIX_FILE_CONTEXT
     else:
         i = CS - LEN_LIX_FILE_CONTEXT_V3
@@ -198,15 +215,18 @@ def _parse_macro_header(bb, abs_path_lid=None):
 
     # CQ area
     cqa = cqb = cqc = 0
-    if g_glt == 'CTD' and file_version >= 3:
-        cq_area = bb[13 + LEN_LIX_FILE_CC_AREA: 13 + LEN_LIX_FILE_CC_AREA + 15]
-        cqa = a2n(cq_area[0:5].decode())
-        cqb = a2n(cq_area[5:10].decode())
-        cqc = a2n(cq_area[10:15].decode())
-        _p(f'{pad}cqa = {cqa}')
-        _p(f'{pad}cqb = {cqb}')
-        _p(f'{pad}cqc = {cqc}')
-
+    if g_glt == 'CTD':
+        if file_version >= FILE_VERSION_V3:
+            cq_area = bb[13 + LEN_LIX_FILE_CC_AREA: 13 + LEN_LIX_FILE_CC_AREA + 15]
+            cqa = a2n(cq_area[0:5].decode())
+            cqb = a2n(cq_area[5:10].decode())
+            cqc = a2n(cq_area[10:15].decode())
+            _p(f'{pad}cqa = {cqa}')
+            _p(f'{pad}cqb = {cqb}')
+            _p(f'{pad}cqc = {cqc}')
+        else:
+            print(f"\033[93merror, this seems a very old CTD\033[0m")
+            return
 
 
 
@@ -259,7 +279,7 @@ def _parse_macro_header(bb, abs_path_lid=None):
             f.write(f'\tdso = {dso}\n')
             f.write(f'\tdsu = {dsu}\n')
 
-            if g_glt == 'CTD' and file_version >= 3:
+            if g_glt == 'CTD':
                 f.write(f"\nconductivity\n")
                 f.write(f'\tcqa = {cqa}\n')
                 f.write(f'\tcqb = {cqb}\n')
@@ -275,7 +295,8 @@ def _parse_macro_header(bb, abs_path_lid=None):
                 f.write(f'\t{s_gps[0]}\n')
                 f.write(f'\t{s_gps[1]}\n')
     except (Exception, ) as e:
-        print(f"error when creating header file for {abs_path_lid} -> {e}")
+        s = f"error when creating header file for {abs_path_lid} -> {e}"
+        print(f"\033[93m{s}\033[0m")
 
 
 
@@ -359,18 +380,35 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
     if g_glt == 'CTD':
         # we skip T, P, Accelerometer samples
         bb_c = bb[10:]
-        c2c1 = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
-        c1c2 = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
-        v1v2 = int.from_bytes(bb_c[4:6], byteorder='big', signed=False)
-        v2v1 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
-        if v1v2 + v2v1 == 0:
-            s = f'warning, v1v2 + v2v1 == 0, skipping this sample'
+        ratio_cv = 0
+        if g_file_version <= FILE_VERSION_V3:
+            c2c1 = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
+            c1c2 = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
+            v1v2 = int.from_bytes(bb_c[4:6], byteorder='big', signed=False)
+            v2v1 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
+            if v1v2 + v2v1 == 0:
+                s = f'warning, v1v2 + v2v1 == 0, skipping this sample'
+                print(f"\033[93m{s}\033[0m")
+                return
+            ratio_cv = '{:.6f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
+
+        if g_file_version == FILE_VERSION_V4:
+            c_c = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
+            v_v = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
+            if v_v == 0:
+                s = f'warning, v_v == 0, skipping this sample'
+                print(f"\033[93m{s}\033[0m")
+                return
+            ratio_cv = '{:.6f}'.format(c_c / v_v)
+
+
+        # check ratio
+        if ratio_cv == 0:
+            s = f'warning, CTD ratio == 0'
             print(f"\033[93m{s}\033[0m")
-            return
 
 
         # calculate teos_10 in mS/cm, not S/m
-        ratio_cv = '{:.6f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
         conductivity_s_m = (cqa * float(ratio_cv) * float(ratio_cv)) + (cqb * float(ratio_cv)) + cqc
         print('conductivity s_m', conductivity_s_m)
         conductivity_ms_cm = conductivity_s_m * 10
@@ -423,16 +461,12 @@ def _parse_sample_dox(bb, ts, fo):
 
 
 
-class ExceptionLixFileConversion(Exception):
-    pass
-
-
-
 
 def _parse_lid_v2_data_file_and_newer(p):
 
     if not p or not p.endswith('.lid'):
-        print(f'error, filename {p} does not end in .lid')
+        s = f'error, filename {p} does not end in .lid'
+        print(f"\033[93m{s}\033[0m")
         return 1
 
 
@@ -528,7 +562,7 @@ def _parse_lid_v2_data_file_and_newer(p):
 
     # grab CTD constants on newer file versions
     cqa = cqb = cqc = 0
-    if g_glt == 'CTD' and file_version >= 3:
+    if g_glt == 'CTD':
         # 15 is the length of the conductivity calibration constants
         cq_area = bb[13 + LEN_LIX_FILE_CC_AREA: 13 + LEN_LIX_FILE_CC_AREA + 15]
         cqa = a2n(cq_area[0:5].decode())
@@ -543,7 +577,7 @@ def _parse_lid_v2_data_file_and_newer(p):
     # grab SPT in DOX header
     spt = 0
     if g_glt.startswith('DO'):
-        if file_version <= 2:
+        if file_version <= FILE_VERSION_V2:
             spt = int(bb_macro_header[200:205].decode())
         else:
             # >= 3

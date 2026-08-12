@@ -395,6 +395,8 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
         if g_file_version == FILE_VERSION_V4:
             c_c = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
             v_v = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
+            print('c_c', c_c)
+            print('v_v', v_v)
             if v_v == 0:
                 s = f'warning, v_v == 0, skipping this sample'
                 print(f"\033[93m{s}\033[0m")
@@ -416,16 +418,31 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
         print(f"Salinity: {teos_10} TEOS-10")
 
 
-        if MORE_COLUMNS:
-            # et: elapsed time, ct: cumulative time
-            et = t
-            s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
-                f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},' \
-                f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n'
-        else:
-            s = (f'{t_str},{vt},{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},'
-                 f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
-        fo.write(s)
+        if g_file_version == FILE_VERSION_V3:
+            if MORE_COLUMNS:
+                # et: elapsed time, ct: cumulative time
+                et = t
+                s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
+                    f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},' \
+                    f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n'
+            else:
+                s = (f'{t_str},{vt},{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},'
+                     f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
+            fo.write(s)
+
+
+        if g_file_version == FILE_VERSION_V4:
+            if MORE_COLUMNS:
+                # et: elapsed time, ct: cumulative time
+                et = t
+                s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
+                    f'{cpd},{vax},{vay},{vaz},{c_c},{v_v},' \
+                    f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n'
+            else:
+                s = (f'{t_str},{vt},{cpd},{vax},{vay},{vaz},{c_c},{v_v},'
+                     f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
+            fo.write(s)
+
 
 
 
@@ -506,16 +523,28 @@ def _parse_lid_v2_data_file_and_newer(p):
         suffix = 'TDO'
 
     elif g_glt == 'CTD':
-        sl = 18
-        csv_column_titles = 'ISO 8601 Time,' \
-                'Temperature (C),Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,'\
-                'Conductivity (mS/cm),Salinity (TEOS-10)\n'
-        if MORE_COLUMNS:
-            csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
-                   'raw ADC Temp,raw ADC Pressure,' \
-                   'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
-                   'Compensated Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,'\
-                   'Conductivity (mS/cm),Salinity (TEOS-10)\n'
+        if g_file_version == FILE_VERSION_V3:
+            sl = 18
+            csv_column_titles = 'ISO 8601 Time,' \
+                    'Temperature (C),Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,'\
+                    'Conductivity (mS/cm),Salinity (TEOS-10)\n'
+            if MORE_COLUMNS:
+                csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
+                       'raw ADC Temp,raw ADC Pressure,' \
+                       'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
+                       'Compensated Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,'\
+                       'Conductivity (mS/cm),Salinity (TEOS-10)\n'
+        if g_file_version == FILE_VERSION_V4:
+            sl = 14
+            csv_column_titles = 'ISO 8601 Time,' \
+                    'Temperature (C),Pressure (dbar),Ax,Ay,Az,c_c,v_v,ratio_cv,'\
+                    'Conductivity (mS/cm),Salinity (TEOS-10)\n'
+            if MORE_COLUMNS:
+                csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
+                       'raw ADC Temp,raw ADC Pressure,' \
+                       'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
+                       'Compensated Pressure (dbar),Ax,Ay,Az,c_c,v_v,ratio_cv,'\
+                       'Conductivity (mS/cm),Salinity (TEOS-10)\n'
         suffix = 'CTD'
 
     elif g_glt.startswith('DO'):

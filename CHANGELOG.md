@@ -9,3 +9,6 @@
 0.1.3   05/28/26
         Added support for DO1 and DO2
 
+0.1.4   12/08/26
+        Able to parse CTD files v4
+

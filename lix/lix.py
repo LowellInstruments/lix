@@ -32,6 +32,10 @@ g_file_version = 0
 
 
 
+DBARS_FOR_1M_PLUS_ATM = 11
+
+
+
 class ExceptionLixFileConversion(Exception):
     pass
 
@@ -325,8 +329,10 @@ def _parse_mask(bb):
 
 
 
-def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
+def _parse_sample(bb, t, fo_csv, fo_csf, lct, lcp, prc, prd, cqa, cqb, cqc):
 
+    # lct: lix converter temp.
+    # lcp: lix converter pres.
     # rt:  temperature raw ADC counts
     # rp:  pressure raw ADC counts
     # rpd: pressure raw decibar using PRA, PRB
@@ -372,9 +378,13 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
             et = t
             s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{int(cp)},' \
                 f'{cpd},{vax},{vay},{vaz}\n'
-            fo.write(s)
+            fo_csv.write(s)
+            if float(cpd) > DBARS_FOR_1M_PLUS_ATM:
+                fo_csf.write(s)
         else:
-            fo.write(f'{t_str},{vt},{cpd},{vax},{vay},{vaz}\n')
+            fo_csv.write(f'{t_str},{vt},{cpd},{vax},{vay},{vaz}\n')
+            if float(cpd) > DBARS_FOR_1M_PLUS_ATM:
+                fo_csf.write(f'{t_str},{vt},{cpd},{vax},{vay},{vaz}\n')
 
 
     if g_glt == 'CTD':
@@ -428,7 +438,9 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
             else:
                 s = (f'{t_str},{vt},{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},'
                      f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
-            fo.write(s)
+            fo_csv.write(s)
+            if float(cpd) > DBARS_FOR_1M_PLUS_ATM:
+                fo_csf.write(s)
 
 
         if g_file_version == FILE_VERSION_V4:
@@ -441,12 +453,14 @@ def _parse_sample(bb, t, fo, lct, lcp, prc, prd, cqa, cqb, cqc):
             else:
                 s = (f'{t_str},{vt},{cpd},{vax},{vay},{vaz},{c_c},{v_v},'
                      f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
-            fo.write(s)
+            fo_csv.write(s)
+            if float(cpd) > DBARS_FOR_1M_PLUS_ATM:
+                fo_csf.write(s)
 
 
 
 
-def _parse_sample_dox(bb, ts, fo):
+def _parse_sample_dox(bb, ts, fo_csv, fo_csf):
     is_do2 = g_glt == 'DO2'
     dos = do16_to_float(int.from_bytes(bb[0:2], "big"))
     dop = do16_to_float(int.from_bytes(bb[2:4], "big"))
@@ -471,15 +485,20 @@ def _parse_sample_dox(bb, ts, fo):
 
     if is_do2:
         s = f'{t_str},{dos},{dop},{dot},{wat}\n'
+        if int(float(wat)) > 50:
+            fo_csf.write(s)
     else:
+        # always for DO-1
         s = f'{t_str},{dos},{dop},{dot}\n'
-    fo.write(s)
+        fo_csf.write(s)
+
+    fo_csv.write(s)
 
 
 
 
 
-def _parse_lid_v2_data_file_and_newer(p):
+def _parse_lid_v2_data_file_and_newer(p, create_csf):
 
     if not p or not p.endswith('.lid'):
         s = f'error, filename {p} does not end in .lid'
@@ -522,6 +541,7 @@ def _parse_lid_v2_data_file_and_newer(p):
                    'Compensated Pressure (dbar),Ax,Ay,Az\n'
         suffix = 'TDO'
 
+
     elif g_glt == 'CTD':
         if g_file_version == FILE_VERSION_V3:
             sl = 18
@@ -547,6 +567,7 @@ def _parse_lid_v2_data_file_and_newer(p):
                        'Conductivity (mS/cm),Salinity (TEOS-10)\n'
         suffix = 'CTD'
 
+
     elif g_glt.startswith('DO'):
         sl = 6
         csv_column_titles = 'ISO 8601 Time,' \
@@ -564,13 +585,20 @@ def _parse_lid_v2_data_file_and_newer(p):
 
     # start CSV file with its column titles
     path_csv = p.replace('.lid', f'_{suffix}.csv')
-    f_csv = open(path_csv, 'w')
-    f_csv.write(csv_column_titles)
+    fo_csv = open(path_csv, 'w')
+    fo_csv.write(csv_column_titles)
+
+
+    # create CSF file, we might delete it later in this function
+    path_csf = path_csv.replace('.csv', '.csf')
+    fo_csf = open(path_csf, 'w')
+    fo_csf.write(csv_column_titles)
+
 
 
     # grab the cc area in the macro_header
-    lct = 0
-    lcp = 0
+    lix_converter_temp = 0
+    lix_converter_pres = 0
     prc = 0
     prd = 0
     if g_glt in ('TDO', 'CTD'):
@@ -584,8 +612,8 @@ def _parse_lid_v2_data_file_and_newer(p):
         prb = a2n(cc_area[130:135].decode())
         prc = float(cc_area[135:140].decode()) / 100
         prd = float(cc_area[140:145].decode()) / 100
-        lct = LixFileConverterT(tma, tmb, tmc, tmd, tmr)
-        lcp = LixFileConverterP(pra, prb)
+        lix_converter_temp = LixFileConverterT(tma, tmb, tmc, tmd, tmr)
+        lix_converter_pres = LixFileConverterP(pra, prb)
 
 
 
@@ -631,6 +659,7 @@ def _parse_lid_v2_data_file_and_newer(p):
     min_mask_len = 1
     if g_glt == 'DO2':
         min_mask_len = 0
+
 
 
     # --------------------------------------
@@ -694,8 +723,9 @@ def _parse_lid_v2_data_file_and_newer(p):
             # step 2) parse TDO / CTD sample 's'
             if not skip_this_sample:
                 _parse_sample(
-                    s[n_mask:], t, f_csv,
-                    lct, lcp, prc, prd,
+                    s[n_mask:], t, fo_csv, fo_csf,
+                    lix_converter_temp, lix_converter_pres,
+                    prc, prd,
                     cqa, cqb, cqc
                 )
             i = j
@@ -718,13 +748,26 @@ def _parse_lid_v2_data_file_and_newer(p):
                 s = bb[i:j]
                 need_parse_mini = 0
 
-            _parse_sample_dox(s, ts, f_csv)
+            _parse_sample_dox(s, ts, fo_csv, fo_csf)
             i = j
 
         # number of measurements
         nm += 1
 
-    f_csv.close()
+    fo_csv.close()
+    fo_csf.close()
+
+
+    # we decide if we keep it
+    with open(path_csf) as fi_csf:
+        ll = fi_csf.readlines()
+        if len(ll) == 1 or not create_csf:
+            if len(ll) == 1:
+                print(f'warning, CSF file {os.path.basename(path_csf)} is empty, deleting it')
+            else:
+                print(f'warning, create_CSF = False, deleting file {os.path.basename(path_csf)}')
+            os.unlink(path_csf)
+
 
 
     # useful during development, copy converted file here
@@ -735,5 +778,5 @@ def _parse_lid_v2_data_file_and_newer(p):
 
 
 
-def parse_lid_v2_data_file(p):
-    return _parse_lid_v2_data_file_and_newer(p)
+def parse_lid_v2_data_file(p, create_csf=False):
+    return _parse_lid_v2_data_file_and_newer(p, create_csf)

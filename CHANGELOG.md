@@ -12,3 +12,6 @@
 0.1.4   12/08/26
         Able to parse CTD files v4
 
+0.1.5   19/08/26
+        Feature: create CSF files (CSV filtered)
+

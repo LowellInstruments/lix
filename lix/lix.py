@@ -1,5 +1,7 @@
 import datetime
 import os
+import time
+
 from lix.ascii85 import ascii85_to_num as a2n
 from lix.pressure import LixFileConverterP, prf_compensate_pressure
 from lix.temperature import LixFileConverterT
@@ -759,6 +761,7 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
 
 
     # we decide if we keep it
+    delete_csf = False
     with open(path_csf) as fi_csf:
         ll = fi_csf.readlines()
         if len(ll) == 1 or not create_csf:
@@ -766,13 +769,14 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
                 print(f'warning, CSF file {os.path.basename(path_csf)} is empty, deleting it')
             else:
                 print(f'warning, create_CSF = False, deleting file {os.path.basename(path_csf)}')
-            os.unlink(path_csf)
+            delete_csf = True
 
 
 
-    # useful during development, copy converted file here
-    # c = f'cp {path_csv} .'
-    # sp.run(c, shell=True)
+    # do it like this or MSWindows complains
+    if delete_csf:
+        os.unlink(path_csf)
+
 
     return 0
 

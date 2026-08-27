@@ -15,3 +15,7 @@
 0.1.5   19/08/26
         Feature: create CSF files (CSV filtered)
 
+0.1.6   08/27/26
+        Dropped support for two-samples CTD files
+
+

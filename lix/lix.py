@@ -15,7 +15,6 @@ from lix.utils import scale_battery
 # versions of files
 FILE_VERSION_V2 = 2
 FILE_VERSION_V3 = 3
-FILE_VERSION_V4 = 4
 
 
 
@@ -393,27 +392,15 @@ def _parse_sample(bb, t, fo_csv, fo_csf, lct, lcp, prc, prd, cqa, cqb, cqc):
         # we skip T, P, Accelerometer samples
         bb_c = bb[10:]
         ratio_cv = 0
-        if g_file_version <= FILE_VERSION_V3:
-            c2c1 = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
-            c1c2 = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
-            v1v2 = int.from_bytes(bb_c[4:6], byteorder='big', signed=False)
-            v2v1 = int.from_bytes(bb_c[6:8], byteorder='big', signed=False)
-            if v1v2 + v2v1 == 0:
-                s = f'warning, v1v2 + v2v1 == 0, skipping this sample'
-                print(f"\033[93m{s}\033[0m")
-                return
-            ratio_cv = '{:.6f}'.format((c2c1 + c1c2) / (v1v2 + v2v1))
-
-        if g_file_version == FILE_VERSION_V4:
-            c_c = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
-            v_v = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
-            print('c_c', c_c)
-            print('v_v', v_v)
-            if v_v == 0:
-                s = f'warning, v_v == 0, skipping this sample'
-                print(f"\033[93m{s}\033[0m")
-                return
-            ratio_cv = '{:.6f}'.format(c_c / v_v)
+        c_c = int.from_bytes(bb_c[0:2], byteorder='big', signed=False)
+        v_v = int.from_bytes(bb_c[2:4], byteorder='big', signed=False)
+        print('c_c', c_c)
+        print('v_v', v_v)
+        if v_v == 0:
+            s = f'warning, v_v == 0, skipping this sample'
+            print(f"\033[93m{s}\033[0m")
+            return
+        ratio_cv = '{:.6f}'.format(c_c / v_v)
 
 
         # check ratio
@@ -430,34 +417,18 @@ def _parse_sample(bb, t, fo_csv, fo_csf, lct, lcp, prc, prd, cqa, cqb, cqc):
         print(f"Salinity: {teos_10} TEOS-10")
 
 
-        if g_file_version == FILE_VERSION_V3:
-            if MORE_COLUMNS:
-                # et: elapsed time, ct: cumulative time
-                et = t
-                s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
-                    f'{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},' \
-                    f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n'
-            else:
-                s = (f'{t_str},{vt},{cpd},{vax},{vay},{vaz},{c2c1},{c1c2},{v1v2},{v2v1},'
-                     f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
-            fo_csv.write(s)
-            if float(cpd) > DBARS_FOR_1M_PLUS_ATM:
-                fo_csf.write(s)
-
-
-        if g_file_version == FILE_VERSION_V4:
-            if MORE_COLUMNS:
-                # et: elapsed time, ct: cumulative time
-                et = t
-                s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
-                    f'{cpd},{vax},{vay},{vaz},{c_c},{v_v},' \
-                    f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n'
-            else:
-                s = (f'{t_str},{vt},{cpd},{vax},{vay},{vaz},{c_c},{v_v},'
-                     f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
-            fo_csv.write(s)
-            if float(cpd) > DBARS_FOR_1M_PLUS_ATM:
-                fo_csf.write(s)
+        if MORE_COLUMNS:
+            # et: elapsed time, ct: cumulative time
+            et = t
+            s = f'{t_str},{et},{g_last_ct},{rt},{rp},{vt},{rpd},{cp},' \
+                f'{cpd},{vax},{vay},{vaz},{c_c},{v_v},' \
+                f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n'
+        else:
+            s = (f'{t_str},{vt},{cpd},{vax},{vay},{vaz},{c_c},{v_v},'
+                 f'{ratio_cv},{conductivity_ms_cm:.3f},{teos_10:.3f}\n')
+        fo_csv.write(s)
+        if float(cpd) > DBARS_FOR_1M_PLUS_ATM:
+            fo_csf.write(s)
 
 
 
@@ -545,27 +516,15 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
 
 
     elif g_glt == 'CTD':
-        if g_file_version == FILE_VERSION_V3:
-            sl = 18
-            csv_column_titles = 'ISO 8601 Time,' \
-                    'Temperature (C),Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,'\
-                    'Conductivity (mS/cm),Salinity (TEOS-10)\n'
-            if MORE_COLUMNS:
-                csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
-                       'raw ADC Temp,raw ADC Pressure,' \
-                       'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
-                       'Compensated Pressure (dbar),Ax,Ay,Az,c2c1,c1c2,v1v2,v2v1,ratio_cv,'\
-                       'Conductivity (mS/cm),Salinity (TEOS-10)\n'
-        if g_file_version == FILE_VERSION_V4:
-            sl = 14
-            csv_column_titles = 'ISO 8601 Time,' \
-                    'Temperature (C),Pressure (dbar),Ax,Ay,Az,c_c,v_v,ratio_cv,'\
-                    'Conductivity (mS/cm),Salinity (TEOS-10)\n'
-            if MORE_COLUMNS:
-                csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
-                       'raw ADC Temp,raw ADC Pressure,' \
-                       'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
-                       'Compensated Pressure (dbar),Ax,Ay,Az,c_c,v_v,ratio_cv,'\
+        sl = 14
+        csv_column_titles = 'ISO 8601 Time,' \
+                'Temperature (C),Pressure (dbar),Ax,Ay,Az,c_c,v_v,ratio_cv,'\
+                'Conductivity (mS/cm),Salinity (TEOS-10)\n'
+        if MORE_COLUMNS:
+            csv_column_titles = 'ISO 8601 Time,elapsed time (s),agg. time(s),' \
+                   'raw ADC Temp,raw ADC Pressure,' \
+                   'Temperature (C),Pressure (dbar),Compensated ADC Pressure,' \
+                   'Compensated Pressure (dbar),Ax,Ay,Az,c_c,v_v,ratio_cv,'\
                        'Conductivity (mS/cm),Salinity (TEOS-10)\n'
         suffix = 'CTD'
 
@@ -633,13 +592,13 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
 
 
 
-    # grab SPT in DOX header
+    # grab SPT, the only thing we need from DOX header
     spt = 0
     if g_glt.startswith('DO'):
         if file_version <= FILE_VERSION_V2:
             spt = int(bb_macro_header[200:205].decode())
         else:
-            # >= 3
+            # >= 3, for DOX loggers flashed after CTD was created
             spt = int(bb_macro_header[216:221].decode())
         print(f'DOX spt = {spt}')
 

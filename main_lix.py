@@ -4,7 +4,7 @@ from lix.lix import parse_lid_v2_data_file
 
 
 if __name__ == '__main__':
-    path = "C:\\Users\\joaqu\\Downloads\\dl_lil_v5\\3000012_BIL_20260824_163433.lid"
+    path = "/home/kaz/Downloads/dl_bil_v5/2699991_BIL_20260902_181209.lid"
     parse_lid_v2_data_file(path, create_csf=False)
 
 

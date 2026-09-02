@@ -106,6 +106,24 @@ def do16_to_float(d):
 
 
 
+def ph16acid_to_float(d):
+    # it's the same
+    return do16_to_float(d)
+
+
+
+def ph16temp_to_float(d):
+    f = (d * 0.01) - 5
+    return f
+
+
+
+def float_to_ph16temp(f):
+    p = (f + 5) / 0.01
+    return p
+
+
+
 def _parse_macro_header(bb, abs_path_lid=None):
     global g_glt
     g_glt = ''
@@ -179,7 +197,13 @@ def _parse_macro_header(bb, abs_path_lid=None):
     pad = '\t\t\t\t\t   '
     _p("\tcontext \t\t|  detected")
     _p(f'{pad}gfv = {gfv}')
+
+
+
+    # we don't do calibration stuff for these loggers
     if g_glt.startswith('DO'):
+        return
+    if g_glt == 'PH1':
         return
 
 
@@ -434,6 +458,7 @@ def _parse_sample(bb, t, fo_csv, fo_csf, lct, lcp, prc, prd, cqa, cqb, cqc):
 
 
 def _parse_sample_dox(bb, ts, fo_csv, fo_csf):
+    # we know its DO1 or DO2, check if DO2 for water sensor
     is_do2 = g_glt == 'DO2'
     dos = do16_to_float(int.from_bytes(bb[0:2], "big"))
     dop = do16_to_float(int.from_bytes(bb[2:4], "big"))
@@ -465,6 +490,36 @@ def _parse_sample_dox(bb, ts, fo_csv, fo_csf):
         s = f'{t_str},{dos},{dop},{dot}\n'
         fo_csf.write(s)
 
+    fo_csv.write(s)
+
+
+
+
+def _parse_sample_ph(bb, ts, fo_csv, fo_csf):
+
+    # bb[0:2] is bytes, bb[0:2].hex() is string
+    temp_bb = bb[0:2].hex()
+    ph_bb = bb[2:4].hex()
+    temp = ph16temp_to_float(int.from_bytes(bb[0:2], "big"))
+    ph = ph16acid_to_float(int.from_bytes(bb[2:4], "big"))
+    temp_conv = float_to_ph16temp(temp)
+
+
+    # only two decimals
+    ph = '{:.2f}'.format(ph)
+    temp = '{:.2f}'.format(temp)
+    print(f'\nph = {ph} = 0x{ph_bb}')
+    print(f'temp = {temp} = 0x{temp_bb}')
+    print(f'temp_conv = {temp_conv}')
+
+    # ts: seconds
+    t_str = datetime.datetime.utcfromtimestamp(ts).isoformat()
+    t_str = t_str + '.000Z'
+
+
+    # for pH
+    s = f'{t_str},{ph},{temp}\n'
+    fo_csf.write(s)
     fo_csv.write(s)
 
 
@@ -535,9 +590,16 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
                'Dissolved Oxygen (mg/l),Dissolved Oxygen (%),' \
                'DO Temperature (C)\n'
         if g_glt == 'DO2':
+            # water sensor
             sl = 8
             csv_column_titles = csv_column_titles.replace('\n', ',Water Detect (%)\n')
         suffix = 'DissolvedOxygen'
+
+
+    elif g_glt == 'PH1':
+        sl = 4
+        csv_column_titles = 'ISO 8601 Time,pH,Temperature (C)\n'
+        suffix = 'pH'
 
     else:
         e = f'lix: _parse_lid_v2_data_file_v2_and_up, cannot get logger type = {g_glt}'
@@ -594,13 +656,13 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
 
     # grab SPT, the only thing we need from DOX header
     spt = 0
-    if g_glt.startswith('DO'):
+    if g_glt.startswith('DO') or g_glt == 'PH1':
         if file_version <= FILE_VERSION_V2:
             spt = int(bb_macro_header[200:205].decode())
         else:
             # >= 3, for DOX loggers flashed after CTD was created
             spt = int(bb_macro_header[216:221].decode())
-        print(f'DOX spt = {spt}')
+        print(f'DOX / PH1 spt = {spt}')
 
 
 
@@ -618,7 +680,7 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
 
     # minimal mask length
     min_mask_len = 1
-    if g_glt == 'DO2':
+    if g_glt in ('DO2', 'DO1', 'PH1'):
         min_mask_len = 0
 
 
@@ -634,7 +696,8 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
         if i + sl + min_mask_len >= data_size:
             print(f'💚 finished {g_glt} file parsing')
             print(f'\t{nm} samples\n\ti = {i}\n'
-                  f'\tdata_size = {data_size}\n\tsample length = {sl}')
+                  f'\tdata_size = {data_size}\n\tsample length = {sl}\n'
+                  f'\tmin_mask_len = {min_mask_len}\n')
             break
 
         if i % CS == 0:
@@ -657,7 +720,8 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
                     # this should NOT happen
                     print(f'💛 early finished {g_glt} file parsing = {nm} samples')
                     print(f'\t{nm} samples\n\ti = {i}\n'
-                          f'\tdata_size = {data_size}\n\tsample length = {sl}')
+                          f'\tdata_size = {data_size}\n\tsample length = {sl}\n'
+                          f'\tmin_mask_len = {min_mask_len}\n')
                     break
 
                 # detect bad memory blocks or 2 samples in one period
@@ -709,7 +773,13 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
                 s = bb[i:j]
                 need_parse_mini = 0
 
-            _parse_sample_dox(s, ts, fo_csv, fo_csf)
+            if g_glt.startswith('DO'):
+                _parse_sample_dox(s, ts, fo_csv, fo_csf)
+            elif g_glt.startswith('PH1'):
+                _parse_sample_ph(s, ts, fo_csv, fo_csf)
+            else:
+                print(f'error, unkwnown glt parsing sample {g_glt}')
+                assert False
             i = j
 
         # number of measurements

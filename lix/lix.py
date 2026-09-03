@@ -518,7 +518,7 @@ def _parse_sample_ph(bb, ts, fo_csv, fo_csf):
 
 
     # for pH
-    s = f'{t_str},{ph},{temp}\n'
+    s = f'{t_str},{temp},{ph}\n'
     fo_csf.write(s)
     fo_csv.write(s)
 

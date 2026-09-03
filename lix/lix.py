@@ -1,6 +1,5 @@
 import datetime
 import os
-import time
 
 from lix.ascii85 import ascii85_to_num as a2n
 from lix.pressure import LixFileConverterP, prf_compensate_pressure
@@ -511,6 +510,14 @@ def _parse_sample_ph(bb, ts, fo_csv, fo_csf):
     print(f'\nph = {ph} = 0x{ph_bb}')
     print(f'temp = {temp} = 0x{temp_bb}')
     print(f'temp_conv = {temp_conv}')
+
+
+    # skip known bad values
+    if ph_bb == '9999' or temp_bb == '9999':
+        print(f'❌ skipping value ph = {ph_bb}, temp {temp_bb}, not saving to CSV')
+        return
+
+
 
     # ts: seconds
     t_str = datetime.datetime.utcfromtimestamp(ts).isoformat()

@@ -18,4 +18,5 @@
 0.1.6   08/27/26
         Dropped support for two-samples CTD files
 
-
+0.1.7   09/03/26
+        Support for ph files, in beta

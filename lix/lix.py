@@ -112,7 +112,7 @@ def ph16acid_to_float(d):
 
 
 def ph16temp_to_float(d):
-    f = (d * 0.01) - 5
+    f = (d * 0.01)
     return f
 
 

@@ -605,7 +605,7 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
 
     elif g_glt == 'PH1':
         sl = 4
-        csv_column_titles = 'ISO 8601 Time,pH,Temperature (C)\n'
+        csv_column_titles = 'ISO 8601 Time,Temperature (C),pH\n'
         suffix = 'pH'
 
     else:

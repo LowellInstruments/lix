@@ -801,10 +801,14 @@ def _parse_lid_v2_data_file_and_newer(p, create_csf):
     with open(path_csf) as fi_csf:
         ll = fi_csf.readlines()
         if len(ll) == 1 or not create_csf:
+            # yellow
+            print("\033[33m")
             if len(ll) == 1:
-                print(f'warning, CSF file {os.path.basename(path_csf)} is empty, deleting it')
+                print(f'CNV: warning, CSF file {os.path.basename(path_csf)} is empty, deleting it')
             else:
-                print(f'warning, create_CSF = False, deleting file {os.path.basename(path_csf)}')
+                print(f'CNV: warning, create_CSF = False, deleting file {os.path.basename(path_csf)}')
+            # reset to normal color
+            print("\033[0m")
             delete_csf = True
 
 
